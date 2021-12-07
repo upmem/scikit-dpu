@@ -2,7 +2,7 @@
 #include <dpu.h>
 
 #ifndef DPU_BINARY
-#define DPU_BINARY "sklearn/tree_dpu/src/dpu_programs/tasklet_stack_check.dpu"
+#define DPU_BINARY "skdpu/tree_dpu/src/dpu_programs/tasklet_stack_check.dpu"
 #endif
 
 struct dpu_set_t allset;

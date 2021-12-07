@@ -32,7 +32,7 @@ except ImportError:
 builtins.__SKLEARN_SETUP__ = True
 
 
-DISTNAME = "scikit-learn"
+DISTNAME = "scikit-dpu"
 DESCRIPTION = "A set of python modules for machine learning and data mining"
 with open("README.rst") as f:
     LONG_DESCRIPTION = f.read()
@@ -49,12 +49,13 @@ PROJECT_URLS = {
 
 # We can actually import a restricted version of sklearn that
 # does not need the compiled code
-import sklearn  # noqa
+import sklearn
+import skdpu  # noqa
 import sklearn._min_dependencies as min_deps  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
 
 
-VERSION = sklearn.__version__
+VERSION = skdpu.__version__
 
 
 # For some commands, use setuptools
@@ -100,7 +101,7 @@ class CleanCommand(Clean):
             print("Will remove generated .c files")
         if os.path.exists("build"):
             shutil.rmtree("build")
-        for dirpath, dirnames, filenames in os.walk("sklearn"):
+        for dirpath, dirnames, filenames in os.walk("skdpu"):
             for filename in filenames:
                 if any(
                     filename.endswith(suffix)
@@ -198,7 +199,7 @@ def configuration(parent_package="", top_path=None):
     # message from the start if it's not the case.
     _check_cython_version()
 
-    config.add_subpackage("sklearn")
+    config.add_subpackage("skdpu")
 
     return config
 
@@ -222,7 +223,7 @@ def check_package_status(package, min_version):
         package_status["up_to_date"] = False
         package_status["version"] = ""
 
-    req_str = "scikit-learn requires {} >= {}.\n".format(package, min_version)
+    req_str = "scikit-dpu requires {} >= {}.\n".format(package, min_version)
 
     instructions = (
         "Installation instructions are available on the "

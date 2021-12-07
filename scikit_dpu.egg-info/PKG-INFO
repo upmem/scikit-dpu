@@ -1,0 +1,43 @@
+Metadata-Version: 2.1
+Name: scikit-dpu
+Version: 0.0.dev0
+Summary: A set of python modules for machine learning and data mining
+Home-page: http://scikit-learn.org
+Maintainer: Andreas Mueller
+Maintainer-email: amueller@ais.uni-bonn.de
+License: new BSD
+Download-URL: https://pypi.org/project/scikit-learn/#files
+Project-URL: Bug Tracker, https://github.com/scikit-learn/scikit-learn/issues
+Project-URL: Documentation, https://scikit-learn.org/stable/documentation.html
+Project-URL: Source Code, https://github.com/scikit-learn/scikit-learn
+Platform: UNKNOWN
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Python
+Classifier: Topic :: Software Development
+Classifier: Topic :: Scientific/Engineering
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Unix
+Classifier: Operating System :: MacOS
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Requires-Python: >=3.7
+Provides-Extra: examples
+Provides-Extra: docs
+Provides-Extra: tests
+Provides-Extra: benchmark
+License-File: LICENSE
+
+.. -*- mode: rst -*-
+
+PIM-enabled scikit-learn extension
+
+

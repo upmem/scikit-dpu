@@ -18,7 +18,7 @@ import os
 import random
 
 
-from ._config import get_config, set_config, config_context
+# from ._config import get_config, set_config, config_context
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # Dev branch marker is: 'X.Y.dev' or 'X.Y.devN' where N is an integer.
 # 'X.Y.dev0' is the canonical version of 'X.Y.dev'
 #
-__version__ = "1.1.dev0"
+__version__ = "0.0.dev0"
 
 
 # On OSX, we can get a runtime error due to multiple OpenMP libraries loaded
@@ -77,55 +77,13 @@ else:
     # It is necessary to do this prior to importing show_versions as the
     # later is linked to the OpenMP runtime to make it possible to introspect
     # it and importing it first would fail if the OpenMP dll cannot be found.
-    from . import _distributor_init  # noqa: F401
-    from . import __check_build  # noqa: F401
-    from .base import clone
-    from .utils._show_versions import show_versions
+    from sklearn import _distributor_init  # noqa: F401
+    from sklearn import __check_build  # noqa: F401
+    from sklearn.base import clone
+    from sklearn.utils._show_versions import show_versions
 
     __all__ = [
-        "calibration",
-        "cluster",
-        "covariance",
-        "cross_decomposition",
-        "datasets",
-        "decomposition",
-        "dummy",
-        "ensemble",
-        "exceptions",
-        "experimental",
-        "externals",
-        "feature_extraction",
-        "feature_selection",
-        "gaussian_process",
-        "inspection",
-        "isotonic",
-        "kernel_approximation",
-        "kernel_ridge",
-        "linear_model",
-        "manifold",
-        "metrics",
-        "mixture",
-        "model_selection",
-        "multiclass",
-        "multioutput",
-        "naive_bayes",
-        "neighbors",
-        "neural_network",
-        "pipeline",
-        "preprocessing",
-        "random_projection",
-        "semi_supervised",
-        "svm",
-        "tree",
-        "discriminant_analysis",
-        "impute",
-        "compose",
-        # Non-modules:
-        "clone",
-        "get_config",
-        "set_config",
-        "config_context",
-        "show_versions",
+        "dpu_tree",
     ]
 
 
