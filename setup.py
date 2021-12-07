@@ -33,26 +33,25 @@ builtins.__SKLEARN_SETUP__ = True
 
 
 DISTNAME = "scikit-dpu"
-DESCRIPTION = "A set of python modules for machine learning and data mining"
+DESCRIPTION = "A set of python modules for machine learning for UPMEM DIMM"
 with open("README.rst") as f:
     LONG_DESCRIPTION = f.read()
-MAINTAINER = "Andreas Mueller"
-MAINTAINER_EMAIL = "amueller@ais.uni-bonn.de"
-URL = "http://scikit-learn.org"
-DOWNLOAD_URL = "https://pypi.org/project/scikit-learn/#files"
-LICENSE = "new BSD"
+MAINTAINER = "Sylvan Brocard"
+MAINTAINER_EMAIL = "sbrocard@upmem.com"
+URL = "https://github.com/SylvanBrocard/scikit-dpu"
+DOWNLOAD_URL = "https://pypi.org/project/scikit-dpu/#files"
+LICENSE = "MIT"
 PROJECT_URLS = {
-    "Bug Tracker": "https://github.com/scikit-learn/scikit-learn/issues",
-    "Documentation": "https://scikit-learn.org/stable/documentation.html",
-    "Source Code": "https://github.com/scikit-learn/scikit-learn",
+    "Bug Tracker": "https://github.com/SylvanBrocard/scikit-dpu/issues",
+    "Source Code": "https://github.com/SylvanBrocard/scikit-dpu",
 }
 
 # We can actually import a restricted version of sklearn that
 # does not need the compiled code
 import sklearn
 import skdpu  # noqa
-import sklearn._min_dependencies as min_deps  # noqa
-from sklearn.externals._packaging.version import parse as parse_version  # noqa
+import sklearn._min_dependencies as min_deps
+from sklearn.externals._packaging.version import parse as parse_version
 
 
 VERSION = skdpu.__version__
@@ -227,8 +226,8 @@ def check_package_status(package, min_version):
 
     instructions = (
         "Installation instructions are available on the "
-        "scikit-learn website: "
-        "http://scikit-learn.org/stable/install.html\n"
+        "scikit-dpu github: "
+        "https://github.com/SylvanBrocard/scikit-dpu\n"
     )
 
     if package_status["up_to_date"] is False:
