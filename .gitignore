@@ -8,8 +8,7 @@
 *.swo
 .DS_Store
 build
-sklearn/datasets/__config__.py
-sklearn/**/*.html
+skdpu/**/*.html
 
 dist/
 MANIFEST
@@ -21,7 +20,7 @@ doc/min_dependency_table.rst
 doc/min_dependency_substitutions.rst
 *.pdf
 pip-log.txt
-scikit_learn.egg-info/
+scikit_dpu.egg-info/
 .coverage
 coverage
 *.py,cover
@@ -74,14 +73,6 @@ _configtest.o.d
 
 # Used by mypy
 .mypy_cache/
-
-# files generated from a template
-sklearn/_loss/_loss.pyx
-sklearn/utils/_seq_dataset.pyx
-sklearn/utils/_seq_dataset.pxd
-sklearn/utils/_weight_vector.pyx
-sklearn/utils/_weight_vector.pxd
-sklearn/linear_model/_sag_fast.pyx
 
 # dpu binaries
 *.dpu
