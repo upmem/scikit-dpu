@@ -21,7 +21,7 @@ try:
     import builtins
 except ImportError:
     # Python 2 compat: just to be able to declare that Python >=3.7 is needed.
-    import __builtin__ as builtins
+    import __builtin__ as builtins  # type: ignore
 
 # This is a bit (!) hackish: we are setting a global variable so that the
 # main sklearn __init__ can detect if it is being loaded by the setup
@@ -169,7 +169,7 @@ except ImportError:
 
 WHEELHOUSE_UPLOADER_COMMANDS = {"fetch_artifacts", "upload_all"}
 if WHEELHOUSE_UPLOADER_COMMANDS.intersection(sys.argv):
-    import wheelhouse_uploader.cmd
+    import wheelhouse_uploader.cmd # type: ignore
 
     cmdclass.update(vars(wheelhouse_uploader.cmd))
 
@@ -263,11 +263,9 @@ def setup_package():
             "Programming Language :: Python",
             "Topic :: Software Development",
             "Topic :: Scientific/Engineering",
-            "Development Status :: 5 - Production/Stable",
-            "Operating System :: Microsoft :: Windows",
+            "Development Status :: 1 - Planning",
             "Operating System :: POSIX",
             "Operating System :: Unix",
-            "Operating System :: MacOS",
             "Programming Language :: Python :: 3",
             "Programming Language :: Python :: 3.7",
             "Programming Language :: Python :: 3.8",
