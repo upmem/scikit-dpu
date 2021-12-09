@@ -14,10 +14,10 @@ np.import_array()
 
 from numpy.math cimport INFINITY
 
-from ..tree._utils cimport log
-from ..tree._utils cimport safe_realloc
-from ..tree._utils cimport sizet_ptr_to_ndarray
-from ..tree._utils cimport WeightedMedianCalculator
+from sklearn.tree._utils cimport log
+from sklearn.tree._utils cimport safe_realloc
+from sklearn.tree._utils cimport sizet_ptr_to_ndarray
+from sklearn.tree._utils cimport WeightedMedianCalculator
 
 cdef class ClassificationCriterionDpu(Criterion):
     """Abstract criterion for classification."""

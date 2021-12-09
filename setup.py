@@ -21,7 +21,7 @@ try:
     import builtins
 except ImportError:
     # Python 2 compat: just to be able to declare that Python >=3.7 is needed.
-    import __builtin__ as builtins  # type: ignore
+    import __builtin__ as builtins  # noqa
 
 # This is a bit (!) hackish: we are setting a global variable so that the
 # main sklearn __init__ can detect if it is being loaded by the setup
@@ -29,7 +29,7 @@ except ImportError:
 # the numpy distutils extensions that are used by scikit-learn to
 # recursively build the compiled extensions in sub-packages is based on the
 # Python import machinery.
-builtins.__SKLEARN_SETUP__ = True
+builtins.__SKDPU_SETUP__ = True
 
 
 DISTNAME = "scikit-dpu"

@@ -20,7 +20,7 @@ def configuration(parent_package="", top_path=None):
     # we must manually add sub-submodules & tests
 
     # submodules which have their own setup.py
-    config.add_subpackage("tree_dpu")
+    config.add_subpackage("tree")
 
     # Skip cythonization as we do not want to include the generated
     # C/C++ files in the release tarballs as they are not necessarily

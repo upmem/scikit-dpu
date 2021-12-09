@@ -2,8 +2,8 @@
 #
 # License: MIT
 
-from ..tree._criterion cimport Criterion
-from ..tree._splitter cimport Splitter
+from sklearn.tree._criterion cimport Criterion
+from sklearn.tree._splitter cimport Splitter
 
 from libc.stdlib cimport free
 from libc.stdlib cimport qsort
@@ -14,11 +14,11 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 
-from ..tree._utils cimport log
-from ..tree._utils cimport rand_int
-from ..tree._utils cimport rand_uniform
-from ..tree._utils cimport RAND_R_MAX
-from ..tree._utils cimport safe_realloc
+from sklearn.tree._utils cimport log
+from sklearn.tree._utils cimport rand_int
+from sklearn.tree._utils cimport rand_uniform
+from sklearn.tree._utils cimport RAND_R_MAX
+from sklearn.tree._utils cimport safe_realloc
 
 cdef extern from "src/trees.h":
     struct Params:
@@ -27,6 +27,8 @@ cdef extern from "src/trees.h":
     void free_dpus(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
     void populateDpu(Params *p, float **features)
+    void query_min_max(SIZE_t current_feature, DTYPE_t* min_feature_value, DTYPE_t* max_feature_value)
+    void dpu_partition(DTYPE_t* current_threshold, SIZE_t* samples_left_leaf, SIZE_t* samples_right_leaf)
 
 cdef double INFINITY = np.inf
 

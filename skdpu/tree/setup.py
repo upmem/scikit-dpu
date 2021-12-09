@@ -8,14 +8,24 @@ from numpy.distutils.misc_util import Configuration
 dpu_pkg_config_libs = subprocess.getoutput("dpu-pkg-config --libs dpu")[2:]
 dpu_pkg_config_include = subprocess.getoutput("dpu-pkg-config --cflags dpu")[2:]
 
+
 def configuration(parent_package="", top_path=None):
-    config = Configuration("tree_dpu", parent_package, top_path)
+    config = Configuration("tree", parent_package, top_path)
     libraries = []
     if os.name == "posix":
         libraries.append("m")
+
+    # compiling DPU binaries and adding them as a resource
+    print("Compiling DPU binary")
+    output = subprocess.run(
+        ["dpu-upmem-dpurte-clang", "-DNR_TASKLETS=3", "-DSTACK_SIZE_DEFAULT=256", "-DSTACK_SIZE_TASKLET_1=2048", "-O2",
+         "-o", "tasklet_stack_check.dpu", "tasklet_stack_check.c"], cwd='skdpu/tree/src/dpu_programs')
+    print(output)
+    config.add_data_files('src/dpu_programs/tasklet_stack_check.dpu')
+
     # config.add_extension(
     #     "_splitter_dpu",
-    #     sources=["_splitter_dpu.pyx"],
+    #     sources=["_splitter.pyx"],
     #     include_dirs=[numpy.get_include(), dpu_pkg_config_include],
     #     libraries=libraries + [dpu_pkg_config_libs],
     #     extra_compile_args=["-O3"],
@@ -23,13 +33,10 @@ def configuration(parent_package="", top_path=None):
     config.add_extension(
         "_dpu",
         sources=["_dpu.pyx", "src/_dpu_c.c"],
-        # include_dirs=[numpy.get_include()],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
-        # libraries=libraries,
         libraries=libraries + [dpu_pkg_config_libs],
-        # extra_compile_args=["-O3"] + dpu_pkg_config_args,
         extra_compile_args=["-O3"],
-        define_macros=[("NB_CLUSTERS","12")],
+        define_macros=[("NB_CLUSTERS", "12")],
     )
 
     # config.add_subpackage("tests")
