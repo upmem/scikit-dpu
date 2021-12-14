@@ -8,6 +8,8 @@
 #ifndef _H_TREES_COMMON
 #define _H_TREES_COMMON /**< header guard */
 
+#include <stdint.h>
+
 /** @name Constraints
  * @brief Data size constraints
  */
@@ -22,6 +24,7 @@
     500 /**< How many split records we fit into one DPU's MRAM. Can be         \
            increased further. */
 #define MAX_CLASSES 32 /**< How many different target classes we allow */
+#define MAX_NB_LEAF 1000 /**< How many tree leaves are supported by the DPU program */
 /**@}*/
 
 // Define the size of features (choose one):
@@ -34,5 +37,19 @@ typedef float feature_t;
 ////////// OR
 // typedef int32_t int_feature;
 // #define FEATURETYPE_32
+
+/**
+ * @struct Command
+ * @brief structure to store a command from the host for the DPU
+ **/
+#define SPLIT_EVALUATE 0
+#define SPLIT_COMMIT 1
+struct Command {
+
+    uint8_t type; /**< type of command (split_evaluate=0 or split_commit=1)*/
+    uint8_t feature_index; /**< feature index for the split */
+    uint16_t leaf_index; /**< leaf index for the split */
+    feature_t feature_threshold; /**< threshold for the split */
+};
 
 #endif
