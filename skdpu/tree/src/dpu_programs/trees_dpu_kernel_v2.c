@@ -421,12 +421,15 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   uint32_t start_index = leaf_start_index[leaf_index];
   *index = ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t);
   // handle the case where *index > leaf_end_index[leaf_index]
-  if (*index > leaf_end_index[leaf_index]) {
+  if (*index >= leaf_end_index[leaf_index]) {
     *size = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
     return;
   }
   uint32_t nb_buffers = (leaf_end_index[leaf_index] - *index) / SIZE_BATCH;
-  *size = nb_buffers * SIZE_BATCH;
+  if (nb_buffers)
+    *size = nb_buffers * SIZE_BATCH;
+  else
+    *size = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 }
 
 /**
