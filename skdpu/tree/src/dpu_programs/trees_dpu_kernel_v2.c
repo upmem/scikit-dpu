@@ -525,7 +525,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
 
     pivot = partition_buffer(feature_values_commit_low,
                              feature_values_commit_cmp_low, size,
-                             cmds_array[index_cmd].feature_threshold);
+                             cmds_array[index_cmd].feature_threshold) +
+            start_index_low;
 
     store_feature_values(start_index_low, feature_index, size,
                          feature_values[me()]);
@@ -684,20 +685,40 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
     feature_t *feature_values_cmp =
         load_feature_values(prolog_start, cmp_feature_index,
                             prolog_end - prolog_start, feature_values2[me()]);
-    assert(pivot >= prolog_end);
-    uint32_t start_swap_buffer = pivot - (prolog_end - prolog_start);
+
+    uint32_t start_swap_buffer;
+    uint32_t max_n_elems_pivot = prolog_end - prolog_start;
+    if (pivot - start_index < max_n_elems_pivot) {
+      // not enough space after the pivot
+      max_n_elems_pivot = pivot - start_index;
+      start_swap_buffer = start_index;
+    } else
+      start_swap_buffer = pivot - (prolog_end - prolog_start);
+
     feature_t *feature_values_pivot =
-        load_feature_values(start_swap_buffer, feature_index,
-                            prolog_end - prolog_start, feature_values3[me()]);
+        load_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
+                            feature_values3[me()]);
 
     uint32_t swap_index = 0;
     for (int i = 0; i < prolog_end - prolog_start; ++i) {
       if (feature_values_cmp[i] > cmds_array[index_cmd].feature_threshold) {
         assert(pivot);
         swap(&feature_values_prolog[i],
-             &feature_values_pivot[(prolog_end - prolog_start) -
-                                   (++swap_index)]);
+             &feature_values_pivot[max_n_elems_pivot - (++swap_index)]);
+        if (swap_index >= max_n_elems_pivot)
+          break;
       }
+    }
+
+    assert(pivot >= swap_index);
+    pivot -= swap_index;
+    if (pivot == start_index) {
+      // need to also partition the remainder of the prolog
+      uint32_t pivot_prolog = partition_buffer(
+          feature_values_prolog, feature_values_cmp, prolog_end - prolog_start,
+          cmds_array[index_cmd].feature_threshold);
+      pivot = start_index + pivot_prolog;
+      max_n_elems_pivot = prolog_end - prolog_start;
     }
 
     // Need to store the values back in MRAM, but need to handle
@@ -710,9 +731,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
     // is asserted in the main function
     store_feature_values(prolog_start, feature_index, prolog_end - prolog_start,
                          feature_values[me()]);
-    store_feature_values(start_swap_buffer, feature_index,
-                         prolog_end - prolog_start, feature_values3[me()]);
-    pivot -= swap_index;
+
+    store_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
+                         feature_values3[me()]);
   }
   // epilog
   uint32_t epilog_start = start_index + size;
@@ -727,21 +748,39 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
     feature_t *feature_values_cmp =
         load_feature_values(epilog_start, cmp_feature_index,
                             epilog_end - epilog_start, feature_values2[me()]);
+
+    uint32_t max_n_elems_pivot = epilog_end - epilog_start;
+    if (pivot + max_n_elems_pivot > epilog_start) {
+      // not enough space after the pivot
+      assert(pivot <= epilog_start);
+      max_n_elems_pivot = epilog_start - pivot;
+    }
     feature_t *feature_values_pivot = load_feature_values(
-        pivot, feature_index, epilog_end - epilog_start, feature_values3[me()]);
+        pivot, feature_index, max_n_elems_pivot, feature_values3[me()]);
 
     uint32_t swap_index = 0;
     for (int i = 0; i < epilog_end - epilog_start; ++i) {
       if (feature_values_cmp[i] <= cmds_array[index_cmd].feature_threshold) {
         swap(&feature_values_epilog[i], &feature_values_pivot[swap_index++]);
+        if (swap_index >= max_n_elems_pivot)
+          break;
       }
     }
 
+    uint32_t old_pivot = pivot;
+    pivot += swap_index;
+    if (pivot >= epilog_start) {
+      // need to also partition the remainder of the epilog
+      pivot += partition_buffer(feature_values_epilog, feature_values_cmp,
+                                epilog_end - epilog_start,
+                                cmds_array[index_cmd].feature_threshold);
+      max_n_elems_pivot = epilog_end - epilog_start;
+    }
     store_feature_values(epilog_start, feature_index, epilog_end - epilog_start,
                          feature_values[me()]);
-    store_feature_values(pivot, feature_index, epilog_end - epilog_start,
+
+    store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
                          feature_values3[me()]);
-    pivot += swap_index;
   }
   mutex_unlock(commit_mutex);
 
