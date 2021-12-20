@@ -5,7 +5,6 @@
  *
  */
 
-
 #ifndef _TREES_DPU_KERNEL_TEST_H_
 #define _TREES_DPU_KERNEL_TEST_H_
 
@@ -100,7 +99,7 @@ static void test1_init() {
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {
       t_targets[i] = i & 3;
-      printf("point %u target %u\n", i, t_targets[i]);
+      printf("point %u target %f\n", i, t_targets[i]);
     }
     nb_cmds = 2;
     struct Command cmd2, cmd3;
@@ -191,7 +190,7 @@ static void test2_init() {
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {
       t_targets[i] = i & 3;
-      printf("point %u target %u\n", i, t_targets[i]);
+      printf("point %u target %f\n", i, t_targets[i]);
     }
     nb_cmds = 2;
     struct Command cmd2, cmd3;
@@ -288,7 +287,7 @@ static void test3_init() {
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {
       t_targets[i] = i & 3;
-      printf("point %u target %u\n", i, t_targets[i]);
+      printf("point %u target %f\n", i, t_targets[i]);
     }
     nb_cmds = 2;
     struct Command cmd2, cmd3;
@@ -387,7 +386,7 @@ static void test4_init() {
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {
       t_targets[i] = i & 3;
-      printf("point %u target %u\n", i, t_targets[i]);
+      printf("point %u target %f\n", i, t_targets[i]);
     }
     nb_cmds = 2;
     struct Command cmd2, cmd3;
@@ -480,7 +479,7 @@ static void test5_init() {
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {
       t_targets[i] = i & 3;
-      printf("point %u target %u\n", i, t_targets[i]);
+      printf("point %u target %f\n", i, t_targets[i]);
     }
     nb_cmds = 2;
     struct Command cmd2, cmd3;

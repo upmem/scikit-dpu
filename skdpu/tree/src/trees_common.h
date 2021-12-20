@@ -47,6 +47,7 @@ typedef float feature_t;
 struct Command {
 
     uint8_t type; /**< type of command (split_evaluate=0 or split_commit=1)*/
+    //TODO create type min/max
     uint8_t feature_index; /**< feature index for the split */
     uint16_t leaf_index; /**< leaf index for the split */
     feature_t feature_threshold; /**< threshold for the split */
