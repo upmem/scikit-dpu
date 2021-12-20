@@ -13,7 +13,7 @@
 // use this define to get print in case of failure instead of an assert
 //#define PRINT_ERROR_NO_ASSERT
 
-static void test_check_func(uint32_t *expected_gini_cnt,
+static void test_check_func(uint32_t *expected_gini_cnt_low,
                             uint32_t *expected_leaf_cnt, uint16_t split_feature,
                             float *expected_feature_values) {
 
@@ -21,20 +21,22 @@ static void test_check_func(uint32_t *expected_gini_cnt,
     for (int l = 0; l < n_leaves; ++l) {
       printf("leaf %d:\n", l);
       for (int i = 0; i < n_classes; ++i) {
-        printf("gini count class %u: %u/%u\n", i, gini_cnt[l * n_classes + i],
+        printf("gini count class %u: %u/%u\n", i,
+               gini_cnt[l * 2 * n_classes + i],
                leaf_end_index[l] - leaf_start_index[l]);
 #ifdef PRINT_ERROR_NO_ASSERT
-        if (gini_cnt[l * n_classes + i] != expected_gini_cnt[l * n_classes + i])
+        if (gini_cnt[l * 2 * n_classes + i] !=
+            expected_gini_cnt_low[l * n_classes + i])
           printf("ASSERT: gini cnt leaf %u class %u found %u expected %u\n", l,
-                 i, gini_cnt[l * n_classes + i],
-                 expected_gini_cnt[l * n_classes + i]);
+                 i, gini_cnt[l * 2 * n_classes + i],
+                 expected_gini_cnt_low[l * n_classes + i]);
         if ((leaf_end_index[l] - leaf_start_index[l]) != expected_leaf_cnt[l])
           printf("ASSERT: leaf %u size found %u expected %u\n", l,
                  (leaf_end_index[l] - leaf_start_index[l]),
                  expected_leaf_cnt[l]);
 #else
-        assert(gini_cnt[l * n_classes + i] ==
-               expected_gini_cnt[l * n_classes + i]);
+        assert(gini_cnt[l * 2 * n_classes + i] ==
+               expected_gini_cnt_low[l * n_classes + i]);
         assert((leaf_end_index[l] - leaf_start_index[l]) ==
                expected_leaf_cnt[l]);
 #endif
