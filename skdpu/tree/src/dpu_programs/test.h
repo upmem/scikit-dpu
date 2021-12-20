@@ -18,7 +18,10 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
                             float *expected_feature_values) {
 
   if (me() == 0) {
-    for (int l = 0; l < n_leaves; ++l) {
+    for (int l = 0; l < start_n_leaves; ++l) {
+      // only check the gini count of leaf that have SPLIT_EVALUATE command
+      if (cmds_array[l].type != SPLIT_EVALUATE)
+        continue;
       printf("leaf %d:\n", l);
       for (int i = 0; i < n_classes; ++i) {
         printf("gini count class %u: %u/%u\n", i,
