@@ -61,9 +61,12 @@ __host struct Command cmds_array[MAX_NB_LEAF];
 __host uint16_t nb_cmds;
 
 /**
- * @brief array to store the scores or gini count for each leaf and classes
+ * @brief array to store the scores or gini count for each leaf and classes.
+ * The first gini low count is found at element leaf_index * 2 * n_classes
+ * The first gini high count is found at element (leaf_index * 2 + 1) *
+ *n_classes
  **/
-__mram uint32_t gini_cnt[MAX_NB_LEAF * MAX_CLASSES];
+__mram uint32_t gini_cnt[MAX_NB_LEAF * 2 * MAX_CLASSES];
 
 /**
  * @brief the points in one tree leaf are stored consecutively in MRAM
@@ -73,8 +76,10 @@ __mram uint32_t gini_cnt[MAX_NB_LEAF * MAX_CLASSES];
  * index of the next leaf
  **/
 __host uint32_t n_leaves;
+__host uint32_t start_n_leaves;
 __host uint32_t leaf_start_index[MAX_NB_LEAF];
 __host uint32_t leaf_end_index[MAX_NB_LEAF];
+MUTEX_INIT(n_leaves_mutex);
 
 /**
  * @brief size of batch of features read at once for the SPLIT_EVALUATE and
@@ -99,8 +104,9 @@ __dma_aligned feature_t classes_values[NR_TASKLETS][SIZE_BATCH + 16];
 /**
  * @brief WRAM buffers and mutex for the gini count
  **/
-uint32_t w_gini_cnt[NR_TASKLETS][MAX_CLASSES];
-__dma_aligned uint32_t c_gini_cnt[NR_TASKLETS][MAX_CLASSES + 16];
+uint32_t w_gini_cnt_low[NR_TASKLETS][MAX_CLASSES];
+uint32_t w_gini_cnt_high[NR_TASKLETS][MAX_CLASSES];
+__dma_aligned uint32_t c_gini_cnt[NR_TASKLETS][2 * MAX_CLASSES];
 MUTEX_INIT(gini_mutex);
 
 /**
@@ -280,7 +286,8 @@ static void store_feature_values(uint32_t index_batch, uint16_t feature_index,
 /**
  * @brief update the gini counts in MRAM for a given leaf
  **/
-static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_input) {
+static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
+                            uint32_t *gini_cnt_high) {
 
   mutex_lock(gini_mutex);
   // load the current gini cnt
@@ -288,25 +295,31 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_input) {
 #ifdef DEBUG
   printf("update gini count %u leaf %u\n", me(), leaf_index);
 #endif
-  uint32_t start_index = leaf_index * n_classes;
-  uint32_t start_index_8align =
-      ALIGN_8_LOW(start_index * sizeof(uint32_t)) / sizeof(uint32_t);
-  uint32_t diff = start_index - start_index_8align;
-  uint32_t size_8align =
-      ALIGN_8_HIGH((n_classes + diff) * sizeof(uint32_t)) / sizeof(uint32_t);
-  mram_read(&gini_cnt[start_index_8align], c_gini_cnt[me()],
-            size_8align * sizeof(uint32_t));
+  uint32_t start_index = leaf_index * 2 * n_classes;
+  mram_read(&gini_cnt[start_index], c_gini_cnt[me()],
+            2 * n_classes * sizeof(uint32_t));
+
+  // update gini low count
   for (int i = 0; i < n_classes; ++i) {
 #ifdef DEBUG
-    printf("class %u current count %u=%u  incr %u\n", i,
-           c_gini_cnt[me()][diff + i], gini_cnt[start_index_8align + i],
-           gini_cnt_input[i]);
+    printf("class %u current count low %u=%u  incr %u\n", i,
+           c_gini_cnt[me()][i], gini_cnt[start_index + i], gini_cnt_low[i]);
 #endif
-    c_gini_cnt[me()][diff + i] += gini_cnt_input[i];
+    c_gini_cnt[me()][i] += gini_cnt_low[i];
+  }
+
+  // update gini high count
+  for (int i = n_classes; i < 2 * n_classes; ++i) {
+#ifdef DEBUG
+    printf("class %u current count high %u=%u  incr %u\n", i - n_classes,
+           c_gini_cnt[me()][i], gini_cnt[start_index + i],
+           gini_cnt_high[i - n_classes]);
+#endif
+    c_gini_cnt[me()][i] += gini_cnt_high[i - n_classes];
   }
   // store the updated values
-  mram_write(c_gini_cnt[me()], &gini_cnt[start_index_8align],
-             size_8align * sizeof(uint32_t));
+  mram_write(c_gini_cnt[me()], &gini_cnt[start_index],
+             2 * n_classes * sizeof(uint32_t));
   mutex_unlock(gini_mutex);
 }
 
@@ -329,7 +342,8 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
                           size_batch, feature_values[me()]);
   feature_t *classes_val = load_classes_values(index_batch, size_batch);
 
-  memset(w_gini_cnt[me()], 0, n_classes * sizeof(uint32_t));
+  memset(w_gini_cnt_low[me()], 0, n_classes * sizeof(uint32_t));
+  memset(w_gini_cnt_high[me()], 0, n_classes * sizeof(uint32_t));
 
   for (int i = 0; i < size_batch; ++i) {
 
@@ -343,14 +357,15 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
              features_val[i], cmds_array[index_cmd].feature_threshold,
              index_batch, size_batch);
 #endif
-      w_gini_cnt[me()][(uint32_t)(classes_val[i])]++;
-      // TODO also need an array with number of points <= and number of points >
-      // threshold
-    }
+      w_gini_cnt_low[me()][(int32_t)(classes_val[i])]++;
+    } else
+      w_gini_cnt_high[me()][(int32_t)(classes_val[i])]++;
   }
 
   // update the gini count in MRAM
-  update_gini_cnt(cmds_array[index_cmd].leaf_index, w_gini_cnt[me()]);
+  update_gini_cnt(cmds_array[index_cmd].leaf_index, w_gini_cnt_low[me()],
+                  w_gini_cnt_high[me()]);
+
 #ifdef DEBUG
   printf("do_split_evaluate end %d cmd %u batch %u\n", me(), index_cmd,
          index_batch);
@@ -514,7 +529,8 @@ static int partition_buffer(feature_t *feature_values,
  * The feature used for the split is handled last
  * as the other features are reordered based on these values.
  **/
-static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
+static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
+                            uint16_t index_new_leaf) {
 
 #ifdef DEBUG
   printf("do_split_commit tid %d index_cmd %u feature_index %u\n", me(),
@@ -821,29 +837,40 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index) {
   mutex_unlock(commit_mutex);
 
   // update leaf indexes
-  // TODO update leaf index with an index in the command
   if (self) {
-    // create a new leaf only if not all elements fall
+    // create a new leaf even if not all elements fall
     // the same side of the threshold
-    // TODO create an empty leaf to make sure every DPU is in sync
-    if (pivot > 0 && pivot < leaf_end_index[leaf_index]) {
+    // In this case it will be empty
 #ifdef DEBUG
-      printf("pivot found %u\n", pivot);
+    printf("pivot found %u\n", pivot);
 #endif
-      // TODO mutex on n_leaves
-      n_leaves++;
-      assert(n_leaves < MAX_NB_LEAF);
-      uint32_t index_tmp = leaf_end_index[leaf_index];
-      leaf_end_index[leaf_index] = pivot;
-      leaf_start_index[n_leaves - 1] = pivot;
-      leaf_end_index[n_leaves - 1] = index_tmp;
-    }
+    assert(index_new_leaf < MAX_NB_LEAF);
+    uint32_t index_tmp = leaf_end_index[leaf_index];
+    leaf_end_index[leaf_index] = pivot;
+    leaf_start_index[index_new_leaf] = pivot;
+    leaf_end_index[index_new_leaf] = index_tmp;
+    mutex_lock(n_leaves_mutex);
+    n_leaves++;
+    mutex_unlock(n_leaves_mutex);
   }
 
 #ifdef DEBUG
   printf("do_split_commit end tid %d index_cmd %u feature_index %u\n", me(),
          index_cmd, feature_index);
 #endif
+}
+
+/**
+ * @return the next leaf index to use for a commit command
+ **/
+static uint16_t get_new_leaf_index(uint16_t index_cmd) {
+
+  uint16_t n_commits = 0;
+  for (int i = 0; i < index_cmd; ++i) {
+    if (cmds_array[i].type == 1)
+      n_commits++;
+  }
+  return start_n_leaves + n_commits;
 }
 
 BARRIER_INIT(barrier, NR_TASKLETS);
@@ -871,7 +898,7 @@ int main() {
     }
 #endif
 
-    // TODO static assert SIZE_BATCH multiple of 8
+    _Static_assert((SIZE_BATCH & 3) == 0, "SIZE_BATCH must be a multiple of 8");
 
     // initialization
     if (me() == 0) {
@@ -880,13 +907,14 @@ int main() {
       memset(cmd_tasklet_cnt, 0, nb_cmds);
       // TODO should we initialize gini_cnt to zero at each new launch
       // or let the host manage it?
-      memset(gini_cnt, 0, MAX_NB_LEAF);
+      memset(gini_cnt, 0, MAX_NB_LEAF * 2 * n_classes);
 
       // If this assert fails, please make sure to use a number of points
       // that satisfies this condition as it is necessary for MRAM transferts
       // alignment
       assert(((n_points * sizeof(feature_t)) & 7) == 0);
       assert(SIZE_BATCH * sizeof(feature_t) > 8);
+      start_n_leaves = n_leaves;
     }
     barrier_wait(&barrier);
 
@@ -899,7 +927,11 @@ int main() {
         do_split_evaluate(index_cmd, index_batch);
       } else if (cmds_array[index_cmd].type == SPLIT_COMMIT) {
 
-        do_split_commit(index_cmd, index_batch);
+        // if the targeted leaf is empty, this is an error
+        uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
+        assert(leaf_start_index[leaf_index] < leaf_end_index[leaf_index]);
+
+        do_split_commit(index_cmd, index_batch, 0);
 
         bool last = false;
         mutex_lock(commit_mutex);
@@ -908,7 +940,8 @@ int main() {
         mutex_unlock(commit_mutex);
 
         if (last)
-          do_split_commit(index_cmd, cmds_array[index_cmd].feature_index);
+          do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
+                          get_new_leaf_index(index_cmd));
       } else {
         // TODO error handling
         assert(0);
