@@ -10,4 +10,5 @@ from sklearn.tree._tree cimport UINT32_t         # Unsigned 32 bit integer
 
 from sklearn.tree._tree cimport Tree
 from sklearn.tree._tree cimport TreeBuilder
+from sklearn.tree._tree cimport Node
 from sklearn.tree._splitter cimport Splitter
