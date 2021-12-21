@@ -546,12 +546,12 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
  * are handled separatly. This is needed due to the alignment constraints in
  * MRAM/WRAM transferts.
  **/
-static void get_index_and_size_for_commit(uint16_t index_cmd, bool is_target,
+static void get_index_and_size_for_commit(uint16_t index_cmd,
                                           uint32_t *index, uint32_t *size) {
 
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
-  uint32_t start_index = is_target ? 0 : leaf_start_index[leaf_index];
-  uint32_t end_index = is_target ? n_points : leaf_end_index[leaf_index];
+  uint32_t start_index = leaf_start_index[leaf_index];
+  uint32_t end_index = leaf_end_index[leaf_index];
   *index = ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t);
   // handle the case where *index > end_index
   if (*index >= end_index) {
@@ -637,7 +637,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   // the main algorithm will work on aligned indexes, this means
   // the first index is aligned on 8 bytes, and the size is aligned on
   // SIZE_BATCH In the end we handle the prolog and epilog
-  get_index_and_size_for_commit(index_cmd, is_target, &start_index, &size);
+  get_index_and_size_for_commit(index_cmd, &start_index, &size);
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint16_t cmp_feature_index = cmds_array[index_cmd].feature_index;
   bool self = feature_index == cmp_feature_index;
@@ -970,10 +970,18 @@ static uint16_t get_new_leaf_index(uint16_t index_cmd) {
 BARRIER_INIT(barrier, NR_TASKLETS);
 
 // define the TEST variable to run the unit tests
-#define TEST
-
-#ifdef TEST
-#include "test.h"
+#ifdef TEST1
+#include "./test/test1.h"
+#elif defined(TEST2)
+#include "./test/test2.h"
+#elif defined(TEST3)
+#include "./test/test3.h"
+#elif defined(TEST4)
+#include "./test/test4.h"
+#elif defined(TEST5)
+#include "./test/test5.h"
+/*#elif defined(TEST6)*/
+/*#include "./test/test6.h"*/
 #endif
 
 /*================== MAIN FUNCTION ======================*/
@@ -985,74 +993,71 @@ BARRIER_INIT(barrier, NR_TASKLETS);
 int main() {
 
 #ifdef TEST
-  for (int index_test = start_index_tests;
-       index_test < start_index_tests + n_tests; ++index_test) {
-    if (me() == 0) {
-      test_init[index_test]();
-    }
+  if (me() == 0) {
+    test_init();
+  }
 #endif
 
-    _Static_assert((SIZE_BATCH & 7) == 0, "SIZE_BATCH must be a multiple of 8");
-    _Static_assert(SIZE_BATCH * sizeof(feature_t) > 8,
-                   "Please make sure to satisfy this condition necessary for "
-                   "the commit command");
-    _Static_assert((sizeof(feature_t) & 3) == 0,
-                   "sizeof(feature_t) must be multiple of 4");
+  _Static_assert((SIZE_BATCH & 7) == 0, "SIZE_BATCH must be a multiple of 8");
+  _Static_assert(SIZE_BATCH * sizeof(feature_t) > 8,
+      "Please make sure to satisfy this condition necessary for "
+      "the commit command");
+  _Static_assert((sizeof(feature_t) & 3) == 0,
+      "sizeof(feature_t) must be multiple of 4");
 
-    // initialization
-    if (me() == 0) {
-      batch_cnt = 0;
-      cmd_cnt = 0;
-      memset(cmd_tasklet_cnt, 0, nb_cmds);
-      start_n_leaves = n_leaves;
+  // initialization
+  if (me() == 0) {
+    batch_cnt = 0;
+    cmd_cnt = 0;
+    memset(cmd_tasklet_cnt, 0, nb_cmds);
+    start_n_leaves = n_leaves;
+  }
+  barrier_wait(&barrier);
+
+  uint16_t index_cmd = 0;
+  uint32_t index_batch = 0;
+
+  while (get_next_batch(&index_cmd, &index_batch)) {
+
+    if (cmds_array[index_cmd].type == SPLIT_EVALUATE) {
+
+      do_split_evaluate(index_cmd, index_batch);
+
+    } else if (cmds_array[index_cmd].type == SPLIT_COMMIT) {
+
+      // if the targeted leaf is empty, this is an error
+      uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
+      assert(leaf_start_index[leaf_index] < leaf_end_index[leaf_index]);
+
+      do_split_commit(index_cmd, index_batch, 0);
+
+      bool last = false;
+      mutex_lock(commit_mutex);
+      if (++cmd_tasklet_cnt[index_cmd] == n_features)
+        last = true;
+      mutex_unlock(commit_mutex);
+
+      if (last)
+        do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
+            get_new_leaf_index(index_cmd));
+
+    } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
+
+      do_split_minmax(index_cmd, index_batch);
+
+    } else {
+      // TODO error handling
+      assert(0);
     }
-    barrier_wait(&barrier);
+  }
 
-    uint16_t index_cmd = 0;
-    uint32_t index_batch = 0;
-
-    while (get_next_batch(&index_cmd, &index_batch)) {
-
-      if (cmds_array[index_cmd].type == SPLIT_EVALUATE) {
-
-        do_split_evaluate(index_cmd, index_batch);
-
-      } else if (cmds_array[index_cmd].type == SPLIT_COMMIT) {
-
-        // if the targeted leaf is empty, this is an error
-        uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
-        assert(leaf_start_index[leaf_index] < leaf_end_index[leaf_index]);
-
-        do_split_commit(index_cmd, index_batch, 0);
-
-        bool last = false;
-        mutex_lock(commit_mutex);
-        if (++cmd_tasklet_cnt[index_cmd] == n_features)
-          last = true;
-        mutex_unlock(commit_mutex);
-
-        if (last)
-          do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
-                          get_new_leaf_index(index_cmd));
-
-      } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
-
-        do_split_minmax(index_cmd, index_batch);
-
-      } else {
-        // TODO error handling
-        assert(0);
-      }
-    }
-
-    barrier_wait(&barrier);
+  barrier_wait(&barrier);
 
 #ifdef TEST
-    if (me() == 0) {
-      test_check[index_test]();
-    }
-    barrier_wait(&barrier);
+  if (me() == 0) {
+    test_check();
   }
+  barrier_wait(&barrier);
 #endif
 
   return 0;
