@@ -11,6 +11,8 @@
                                  * binaries                                    \
                                  */
 
+#include <attributes.h>
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -25,7 +27,7 @@
 
 #include "../trees_common.h"
 
-#define DEBUG
+/*#define DEBUG*/
 
 /*------------------ INPUT ------------------------------*/
 /** @name Host
@@ -67,6 +69,13 @@ __host uint16_t nb_cmds;
  *n_classes
  **/
 __mram uint32_t gini_cnt[MAX_NB_LEAF * 2 * MAX_CLASSES];
+
+/**
+ * @brief array to store the min/max feature values for each leaf.
+ * This is the returned values for a SPLIT_MINMAX command.
+ **/
+__mram feature_t min_max_feature[MAX_NB_LEAF * 2];
+MUTEX_INIT(minmax_mutex);
 
 /**
  * @brief the points in one tree leaf are stored consecutively in MRAM
@@ -117,6 +126,11 @@ uint32_t cmd_cnt = 0;
 MUTEX_INIT(batch_mutex);
 
 /**
+ * @brief initialization array for the min_max_feature array in MRAM
+ **/
+__dma_aligned feature_t min_max_init[2] = {FLT_MAX, 0};
+
+/**
  * @brief split commit synchronization
  **/
 MUTEX_INIT(commit_mutex);
@@ -145,21 +159,26 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
   return true;
 }
 
-static bool get_next_batch_evaluate(uint16_t *index_cmd,
-                                    uint32_t *index_batch) {
+static bool get_next_batch_evaluate(uint16_t *index_cmd, uint32_t *index_batch,
+                                    bool *first) {
 
   uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
   *index_batch = batch_cnt * SIZE_BATCH + leaf_start_index[leaf_index];
+  *first = (cmd_cnt == 0) && (batch_cnt == 0);
   if (*index_batch >= leaf_end_index[leaf_index]) {
     // finished processing this command, go to next
-    return get_next_command(index_cmd, index_batch);
+    *first = get_next_command(index_cmd, index_batch);
+    return *first;
   }
   *index_cmd = cmd_cnt;
   ++batch_cnt;
   return true;
 }
 
-static bool get_next_batch_commit(uint16_t *index_cmd, uint32_t *index_batch) {
+static bool get_next_batch_commit(uint16_t *index_cmd, uint32_t *index_batch,
+                                  bool *first) {
+
+  *first = (cmd_cnt == 0) && (batch_cnt == 0);
 
   // The trick here is, the feature that has the split needs to be updated last
   // Otherwise we loose the information how to order for the other features
@@ -172,8 +191,10 @@ static bool get_next_batch_commit(uint16_t *index_cmd, uint32_t *index_batch) {
   // as the targets. This means the tasklets will handle all features
   // expect the split feature, the targets, then synchronize and one of
   // them handle the split feature.
-  if (batch_cnt > n_features)
-    return get_next_command(index_cmd, index_batch);
+  if (batch_cnt > n_features) {
+    *first = get_next_command(index_cmd, index_batch);
+    return *first;
+  }
 
   *index_cmd = cmd_cnt;
   *index_batch = batch_cnt;
@@ -185,14 +206,31 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
 
   mutex_lock(batch_mutex);
   bool res = false;
+  bool first_batch = false;
   if (cmd_cnt >= nb_cmds)
     res = false;
-  else if (cmds_array[cmd_cnt].type == SPLIT_EVALUATE) {
-    res = get_next_batch_evaluate(index_cmd, index_batch);
+  else if (cmds_array[cmd_cnt].type == SPLIT_EVALUATE ||
+           cmds_array[cmd_cnt].type == SPLIT_MINMAX) {
+    res = get_next_batch_evaluate(index_cmd, index_batch, &first_batch);
   } else {
     // commit
     // no next batch, go to next command
-    res = get_next_batch_commit(index_cmd, index_batch);
+    res = get_next_batch_commit(index_cmd, index_batch, &first_batch);
+  }
+  if (res && first_batch) {
+    if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
+      // first batch of this SPLIT_EVALUATE command
+      // Need to initialize the gini_cnt for this leaf
+      uint32_t start_index = cmds_array[*index_cmd].leaf_index * 2 * n_classes;
+      memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
+    } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
+      // initialize min_max_feature for this leaf
+      // TODO here assume that feature_t is a multiple of 4
+      uint32_t start_index =
+          cmds_array[*index_cmd].leaf_index * 2 * sizeof(feature_t);
+      mram_write(min_max_init, &min_max_feature[start_index],
+                 2 * sizeof(feature_t));
+    }
   }
   mutex_unlock(batch_mutex);
   return res;
@@ -368,6 +406,62 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
 
 #ifdef DEBUG
   printf("do_split_evaluate end %d cmd %u batch %u\n", me(), index_cmd,
+         index_batch);
+#endif
+}
+
+/**
+ * @brief handle a batch for the SPLIT_MINMAX command
+ **/
+static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
+
+#ifdef DEBUG
+  printf("do_split_minmax %d cmd %u batch %u\n", me(), index_cmd, index_batch);
+#endif
+  uint16_t size_batch = SIZE_BATCH;
+  if (index_batch + SIZE_BATCH >
+      leaf_end_index[cmds_array[index_cmd].leaf_index])
+    size_batch = leaf_end_index[cmds_array[index_cmd].leaf_index] - index_batch;
+
+  feature_t *features_val =
+      load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
+                          size_batch, feature_values[me()]);
+  feature_t *classes_val = load_classes_values(index_batch, size_batch);
+
+  float min = FLT_MAX, max = 0;
+  for (int i = 0; i < size_batch; ++i) {
+
+    if (features_val[i] < min) {
+      // store as minimum value
+      min = features_val[i];
+    } else if (features_val[i] > max) {
+      // store as maximum value
+      max = features_val[i];
+    }
+  }
+
+  // update the min max in MRAM
+  mutex_lock(minmax_mutex);
+  feature_t c_minmax[2];
+  uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
+  // TODO here assume that sizeof(feature_t) is a multiple of 4 bytes
+  mram_read(&min_max_feature[leaf_index * 2], c_minmax, 2 * sizeof(feature_t));
+  bool write = false;
+  if (min < c_minmax[0]) {
+    c_minmax[0] = min;
+    write = true;
+  }
+  if (max > c_minmax[1]) {
+    max = c_minmax[1];
+    write = true;
+  }
+  if (write)
+    mram_write(c_minmax, &min_max_feature[leaf_index * 2],
+               2 * sizeof(feature_t));
+  mutex_unlock(minmax_mutex);
+
+#ifdef DEBUG
+  printf("do_split_minmax end %d cmd %u batch %u\n", me(), index_cmd,
          index_batch);
 #endif
 }
@@ -867,7 +961,7 @@ static uint16_t get_new_leaf_index(uint16_t index_cmd) {
 
   uint16_t n_commits = 0;
   for (int i = 0; i < index_cmd; ++i) {
-    if (cmds_array[i].type == 1)
+    if (cmds_array[i].type == SPLIT_COMMIT)
       n_commits++;
   }
   return start_n_leaves + n_commits;
@@ -898,33 +992,31 @@ int main() {
     }
 #endif
 
-    _Static_assert((SIZE_BATCH & 3) == 0, "SIZE_BATCH must be a multiple of 8");
+    _Static_assert((SIZE_BATCH & 7) == 0, "SIZE_BATCH must be a multiple of 8");
+    _Static_assert(SIZE_BATCH * sizeof(feature_t) > 8,
+                   "Please make sure to satisfy this condition necessary for "
+                   "the commit command");
+    _Static_assert((sizeof(feature_t) & 3) == 0,
+                   "sizeof(feature_t) must be multiple of 4");
 
     // initialization
     if (me() == 0) {
       batch_cnt = 0;
       cmd_cnt = 0;
       memset(cmd_tasklet_cnt, 0, nb_cmds);
-      // TODO should we initialize gini_cnt to zero at each new launch
-      // or let the host manage it?
-      memset(gini_cnt, 0, MAX_NB_LEAF * 2 * n_classes);
-
-      // If this assert fails, please make sure to use a number of points
-      // that satisfies this condition as it is necessary for MRAM transferts
-      // alignment
-      assert(((n_points * sizeof(feature_t)) & 7) == 0);
-      assert(SIZE_BATCH * sizeof(feature_t) > 8);
       start_n_leaves = n_leaves;
     }
     barrier_wait(&barrier);
 
-    uint16_t index_cmd = 0, last_index_cmd = 0;
+    uint16_t index_cmd = 0;
     uint32_t index_batch = 0;
 
     while (get_next_batch(&index_cmd, &index_batch)) {
 
       if (cmds_array[index_cmd].type == SPLIT_EVALUATE) {
+
         do_split_evaluate(index_cmd, index_batch);
+
       } else if (cmds_array[index_cmd].type == SPLIT_COMMIT) {
 
         // if the targeted leaf is empty, this is an error
@@ -942,12 +1034,15 @@ int main() {
         if (last)
           do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
                           get_new_leaf_index(index_cmd));
+
+      } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
+
+        do_split_minmax(index_cmd, index_batch);
+
       } else {
         // TODO error handling
         assert(0);
       }
-
-      last_index_cmd = index_cmd;
     }
 
     barrier_wait(&barrier);
