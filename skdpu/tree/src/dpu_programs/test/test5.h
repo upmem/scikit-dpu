@@ -107,7 +107,7 @@ static void test_check() {
   }
 
   test_check_func(expected_gini_cnt, expected_leaf_cnt, split_feature,
-                  expected_feature_values, 0);
+                  expected_feature_values, 0, 0);
 
   mem_reset();
 }

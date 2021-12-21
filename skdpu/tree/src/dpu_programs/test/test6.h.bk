@@ -8,8 +8,8 @@
  * is not a multiple of 8 bytes.
  */
 
-#ifndef _TREES_DPU_KERNEL_TEST2_H_
-#define _TREES_DPU_KERNEL_TEST2_H_
+#ifndef _TREES_DPU_KERNEL_TEST6_H_
+#define _TREES_DPU_KERNEL_TEST6_H_
 
 #include "./test.h"
 
@@ -20,7 +20,8 @@ static void test_init() {
   // set points/classes
   if (me() == 0) {
     int k = 0;
-    //Note: odd number of points. This will force disalignment in MRAM transferts
+    // Note: odd number of points. This will force disalignment in MRAM
+    // transferts
     n_points = 201;
     n_features = 5;
     for (int j = 0; j < n_features; ++j) {
@@ -106,10 +107,9 @@ static void test_check() {
   }
 
   test_check_func(expected_gini_cnt, expected_leaf_cnt, split_feature,
-                  expected_feature_values, 0);
+                  expected_feature_values, 0, 0);
 
   mem_reset();
 }
-
 
 #endif

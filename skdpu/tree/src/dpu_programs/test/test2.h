@@ -30,7 +30,7 @@ static void test_init() {
     }
     n_classes = 2;
     for (int i = 0; i < n_points; ++i) {
-      if(t_features[i] == 50)
+      if (t_features[i] == 50)
         t_targets[i] = 0;
       else
         t_targets[i] = 1;
@@ -81,8 +81,7 @@ static void test_check() {
   uint32_t *expected_leaf_cnt = mem_alloc(n_leaves * sizeof(uint32_t));
   float *expected_feature_values =
       mem_alloc(n_features * n_points * sizeof(float));
-  float *expected_target_values =
-      mem_alloc(n_points * sizeof(float));
+  float *expected_target_values = mem_alloc(n_points * sizeof(float));
   for (int i = 0; i < n_classes; ++i) {
     expected_gini_cnt[i] = 0;
     expected_gini_cnt[1 * n_classes + i] = 0;
@@ -116,10 +115,9 @@ static void test_check() {
   }
 
   test_check_func(expected_gini_cnt, expected_leaf_cnt, split_feature,
-      expected_feature_values, expected_target_values);
+                  expected_feature_values, expected_target_values, 0);
 
   mem_reset();
 }
-
 
 #endif

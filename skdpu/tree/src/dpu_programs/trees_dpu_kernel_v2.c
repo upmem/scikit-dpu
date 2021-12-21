@@ -149,7 +149,8 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
   batch_cnt = 1;
   if (cmd_cnt >= nb_cmds)
     return false;
-  if (cmds_array[cmd_cnt].type == SPLIT_EVALUATE) {
+  if (cmds_array[cmd_cnt].type == SPLIT_EVALUATE ||
+      cmds_array[cmd_cnt].type == SPLIT_MINMAX) {
     uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
     *index_batch = leaf_start_index[leaf_index];
   } else {
@@ -226,8 +227,7 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
     } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
       // initialize min_max_feature for this leaf
       // TODO here assume that feature_t is a multiple of 4
-      uint32_t start_index =
-          cmds_array[*index_cmd].leaf_index * 2 * sizeof(feature_t);
+      uint32_t start_index = cmds_array[*index_cmd].leaf_index * 2;
       mram_write(min_max_init, &min_max_feature[start_index],
                  2 * sizeof(feature_t));
     }
@@ -426,7 +426,6 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
   feature_t *features_val =
       load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
                           size_batch, feature_values[me()]);
-  feature_t *classes_val = load_classes_values(index_batch, size_batch);
 
   float min = FLT_MAX, max = 0;
   for (int i = 0; i < size_batch; ++i) {
@@ -434,7 +433,8 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
     if (features_val[i] < min) {
       // store as minimum value
       min = features_val[i];
-    } else if (features_val[i] > max) {
+    }
+    if (features_val[i] > max) {
       // store as maximum value
       max = features_val[i];
     }
@@ -442,7 +442,7 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
 
   // update the min max in MRAM
   mutex_lock(minmax_mutex);
-  feature_t c_minmax[2];
+  __dma_aligned feature_t c_minmax[2];
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   // TODO here assume that sizeof(feature_t) is a multiple of 4 bytes
   mram_read(&min_max_feature[leaf_index * 2], c_minmax, 2 * sizeof(feature_t));
@@ -452,9 +452,15 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
     write = true;
   }
   if (max > c_minmax[1]) {
-    max = c_minmax[1];
+    c_minmax[1] = max;
     write = true;
   }
+#ifdef DEBUG
+  printf("do_split_minmax tid %d cmd %u batch %u: mram min %f batch min %f "
+         "mram max %f batch max %f write %d\n",
+         me(), index_cmd, index_batch, c_minmax[0], min, c_minmax[1], max,
+         write);
+#endif
   if (write)
     mram_write(c_minmax, &min_max_feature[leaf_index * 2],
                2 * sizeof(feature_t));
@@ -546,8 +552,8 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
  * are handled separatly. This is needed due to the alignment constraints in
  * MRAM/WRAM transferts.
  **/
-static void get_index_and_size_for_commit(uint16_t index_cmd,
-                                          uint32_t *index, uint32_t *size) {
+static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
+                                          uint32_t *size) {
 
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint32_t start_index = leaf_start_index[leaf_index];
@@ -982,6 +988,8 @@ BARRIER_INIT(barrier, NR_TASKLETS);
 #include "./test/test5.h"
 /*#elif defined(TEST6)*/
 /*#include "./test/test6.h"*/
+#elif defined(TEST7)
+#include "./test/test7.h"
 #endif
 
 /*================== MAIN FUNCTION ======================*/
@@ -1000,10 +1008,10 @@ int main() {
 
   _Static_assert((SIZE_BATCH & 7) == 0, "SIZE_BATCH must be a multiple of 8");
   _Static_assert(SIZE_BATCH * sizeof(feature_t) > 8,
-      "Please make sure to satisfy this condition necessary for "
-      "the commit command");
+                 "Please make sure to satisfy this condition necessary for "
+                 "the commit command");
   _Static_assert((sizeof(feature_t) & 3) == 0,
-      "sizeof(feature_t) must be multiple of 4");
+                 "sizeof(feature_t) must be multiple of 4");
 
   // initialization
   if (me() == 0) {
@@ -1039,7 +1047,7 @@ int main() {
 
       if (last)
         do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
-            get_new_leaf_index(index_cmd));
+                        get_new_leaf_index(index_cmd));
 
     } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
 
