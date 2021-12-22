@@ -46,8 +46,8 @@ static void test_init() {
     cmd3.feature_threshold = 30;
     cmd3.leaf_index = 0;
 
-    cmds_array[0] = cmd2;
-    cmds_array[1] = cmd3;
+    cmds_array[0] = cmd3;
+    cmds_array[1] = cmd2;
 
     n_leaves = 2;
     leaf_start_index[0] = 0;
