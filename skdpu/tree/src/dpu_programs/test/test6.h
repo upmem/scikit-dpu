@@ -2,10 +2,6 @@
  * @file test6.h
  * @author Julien Legriel (jlegriel@upmem.com)
  * @brief Test 6 for the DPU side of the tree algorithm
- *
- * FIXME this test currently does not pass
- * Need to support the case where n_points * sizeof(feature)
- * is not a multiple of 8 bytes.
  */
 
 #ifndef _TREES_DPU_KERNEL_TEST6_H_
@@ -15,7 +11,7 @@
 
 static void test_init() {
 
-  printf("--------------- TEST2 ----------------------\n");
+  printf("--------------- TEST6 ----------------------\n");
 
   // set points/classes
   if (me() == 0) {
@@ -51,8 +47,8 @@ static void test_init() {
     cmd3.feature_threshold = 30;
     cmd3.leaf_index = 0;
 
-    cmds_array[0] = cmd2;
-    cmds_array[1] = cmd3;
+    cmds_array[0] = cmd3;
+    cmds_array[1] = cmd2;
 
     n_leaves = 2;
     leaf_start_index[0] = 0;
@@ -88,7 +84,7 @@ static void test_check() {
     expected_gini_cnt[1 * n_classes + i] = (i & 1) ? 5 : 0;
 
   expected_leaf_cnt[0] = 50;
-  expected_leaf_cnt[1] = 100;
+  expected_leaf_cnt[1] = 101;
   expected_leaf_cnt[2] = 50;
 
   for (int i = 0; i < n_features; ++i) {

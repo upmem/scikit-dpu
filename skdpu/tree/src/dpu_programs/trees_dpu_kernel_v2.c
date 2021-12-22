@@ -552,13 +552,16 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
  * are handled separatly. This is needed due to the alignment constraints in
  * MRAM/WRAM transferts.
  **/
-static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
-                                          uint32_t *size) {
+static void get_index_and_size_for_commit(uint16_t index_cmd,
+                                          uint16_t feature_index,
+                                          uint32_t *index, uint32_t *size) {
 
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
-  uint32_t start_index = leaf_start_index[leaf_index];
+  uint32_t start_index =
+      feature_index * n_points + leaf_start_index[leaf_index];
   uint32_t end_index = leaf_end_index[leaf_index];
-  *index = ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t);
+  *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t)) -
+           (feature_index * n_points);
   // handle the case where *index > end_index
   if (*index >= end_index) {
     *size = end_index - start_index;
@@ -643,7 +646,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   // the main algorithm will work on aligned indexes, this means
   // the first index is aligned on 8 bytes, and the size is aligned on
   // SIZE_BATCH In the end we handle the prolog and epilog
-  get_index_and_size_for_commit(index_cmd, &start_index, &size);
+  get_index_and_size_for_commit(index_cmd, feature_index, &start_index, &size);
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint16_t cmp_feature_index = cmds_array[index_cmd].feature_index;
   bool self = feature_index == cmp_feature_index;
@@ -986,8 +989,8 @@ BARRIER_INIT(barrier, NR_TASKLETS);
 #include "./test/test4.h"
 #elif defined(TEST5)
 #include "./test/test5.h"
-/*#elif defined(TEST6)*/
-/*#include "./test/test6.h"*/
+#elif defined(TEST6)
+#include "./test/test6.h"
 #elif defined(TEST7)
 #include "./test/test7.h"
 #endif
