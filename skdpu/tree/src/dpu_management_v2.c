@@ -10,6 +10,7 @@
 #include "trees.h"
 #include "trees_common.h"
 #include <assert.h>
+#include <stdint.h>
 
 /**
  * @brief Allocates all DPUs
@@ -157,10 +158,13 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
                             &cb_args, DPU_CALLBACK_ASYNC));
 
+    uint32_t size = SIZE_BATCH_POINT_TRANSFER;
+    if (i == nb_batches - 1) {
+      size = (p->npoints * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
+    }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_features",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
-                             SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
-                             DPU_XFER_ASYNC));
+                             size * sizeof(feature_t), DPU_XFER_ASYNC));
   }
 
   // Now handle the targets
@@ -172,10 +176,13 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
                             &cb_args, DPU_CALLBACK_ASYNC));
 
+    uint32_t size = SIZE_BATCH_POINT_TRANSFER;
+    if (i == nb_batches - 1) {
+      size = p->npoints - (i * SIZE_BATCH_POINT_TRANSFER);
+    }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_targets",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
-                             SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
-                             DPU_XFER_ASYNC));
+                             size * sizeof(feature_t), DPU_XFER_ASYNC));
   }
 
   // transfer meta-data to DPU
