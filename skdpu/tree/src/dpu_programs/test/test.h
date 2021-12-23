@@ -29,20 +29,20 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
           expected_gini_cnt_low) {
         for (int i = 0; i < n_classes; ++i) {
           printf("gini count class %u: %u/%u\n", i,
-                 gini_cnt[l * 2 * n_classes + i],
+                 gini_cnt[res_indexes[l] * 2 * n_classes + i],
                  leaf_end_index[l] - leaf_start_index[l]);
 #ifdef PRINT_ERROR_NO_ASSERT
-          if (gini_cnt[l * 2 * n_classes + i] !=
+          if (gini_cnt[res_indexes[l] * 2 * n_classes + i] !=
               expected_gini_cnt_low[l * n_classes + i])
             printf("ASSERT: gini cnt leaf %u class %u found %u expected %u\n",
-                   l, i, gini_cnt[l * 2 * n_classes + i],
+                   l, i, gini_cnt[res_indexes[l] * 2 * n_classes + i],
                    expected_gini_cnt_low[l * n_classes + i]);
           if ((leaf_end_index[l] - leaf_start_index[l]) != expected_leaf_cnt[l])
             printf("ASSERT: leaf %u size found %u expected %u\n", l,
                    (leaf_end_index[l] - leaf_start_index[l]),
                    expected_leaf_cnt[l]);
 #else
-          assert(gini_cnt[l * 2 * n_classes + i] ==
+          assert(gini_cnt[res_indexes[l] * 2 * n_classes + i] ==
                  expected_gini_cnt_low[l * n_classes + i]);
           assert((leaf_end_index[l] - leaf_start_index[l]) ==
                  expected_leaf_cnt[l]);
@@ -105,21 +105,24 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
       if (l < start_n_leaves && cmds_array[l].type == SPLIT_MINMAX &&
           expected_min_max) {
 
-        printf("min/max: %f/%f\n", min_max_feature[l * 2],
-               min_max_feature[l * 2 + 1]);
+        printf("min/max: %f/%f\n", min_max_feature[res_indexes[l] * 2],
+               min_max_feature[res_indexes[l] * 2 + 1]);
 #ifdef PRINT_ERROR_NO_ASSERT
-        if (min_max_feature[l * 2] != expected_min_max[l * 2])
+        if (min_max_feature[res_indexes[l] * 2] != expected_min_max[l * 2])
           printf("ASSERT: min value leaf %u found %f expected %f\n", l,
-                 min_max_feature[l * 2], expected_min_max[l * 2]);
+                 min_max_feature[res_indexes[l] * 2], expected_min_max[l * 2]);
 #else
-        assert(min_max_feature[l * 2] == expected_min_max[l * 2]);
+        assert(min_max_feature[res_indexes[l] * 2] == expected_min_max[l * 2]);
 #endif
 #ifdef PRINT_ERROR_NO_ASSERT
-        if (min_max_feature[l * 2 + 1] != expected_min_max[l * 2 + 1])
+        if (min_max_feature[res_indexes[l] * 2 + 1] !=
+            expected_min_max[l * 2 + 1])
           printf("ASSERT: max value leaf %u found %f expected %f\n", l,
-                 min_max_feature[l * 2 + 1], expected_min_max[l * 2 + 1]);
+                 min_max_feature[res_indexes[l] * 2 + 1],
+                 expected_min_max[l * 2 + 1]);
 #else
-        assert(min_max_feature[l * 2 + 1] == expected_min_max[l * 2 + 1]);
+        assert(min_max_feature[res_indexes[l] * 2 + 1] ==
+               expected_min_max[l * 2 + 1]);
 #endif
       }
     }

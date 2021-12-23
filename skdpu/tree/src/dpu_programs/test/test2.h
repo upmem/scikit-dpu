@@ -18,7 +18,7 @@ static void test_init() {
   if (me() == 0) {
     int k = 0;
     n_points = 200;
-    n_features = 5;
+    n_features = 4;
     for (int j = 0; j < n_features; ++j) {
       for (int i = 0; i < n_points; ++i) {
         if ((i < n_points * 0.6) && (i & 1))

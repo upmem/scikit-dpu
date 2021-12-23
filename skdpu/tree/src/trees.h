@@ -8,6 +8,7 @@
 #ifndef _H_TREES
 #define _H_TREES /**< header guard */
 
+#include "trees_common.h"
 #include <dpu.h>
 #include <dpu_target.h>
 #include <math.h>
@@ -15,22 +16,23 @@ typedef struct dpu_set_t dpu_set;
 
 // Parameters holding struct
 typedef struct Params {
-    uint64_t npoints;
-    uint64_t npadded;
-    uint64_t npointperdpu;
-    int nfeatures;
-    float scale_factor;
-    float threshold;
-    float *mean;
-    int isOutput;
-    int nloops;
-    int max_iter;
-    uint32_t ndpu;
-    dpu_set allset;
-    int from_file;
-    int verbose;
-    float *features_mins;
-    float *features_maxes;
+  uint64_t npoints;
+  uint64_t npadded;
+  uint64_t npointperdpu;
+  uint32_t nfeatures;
+  uint32_t ntargets;
+  float scale_factor;
+  float threshold;
+  float *mean;
+  int isOutput;
+  int nloops;
+  int max_iter;
+  uint32_t ndpu;
+  dpu_set allset;
+  int from_file;
+  int verbose;
+  float *features_mins;
+  float *features_maxes;
 } Params;
 
 /**
@@ -38,28 +40,28 @@ typedef struct Params {
  *
  */
 typedef struct SplitRecord {
-    size_t feature; /**< Which feature to split on. */
-    size_t pos; /**< Split samples array at the given position, i.e. count of
-                   samples below threshold for feature. pos is >= end if the
-                   node is a leaf. */
-    double threshold;      /**< Threshold to split at. */
-    double improvement;    /**< Impurity improvement given parent node. */
-    double impurity_left;  /**< Impurity of the left split. */
-    double impurity_right; /**< Impurity of the right split. */
+  size_t feature; /**< Which feature to split on. */
+  size_t pos;     /**< Split samples array at the given position, i.e. count of
+                     samples below threshold for feature. pos is >= end if the
+                     node is a leaf. */
+  double threshold;      /**< Threshold to split at. */
+  double improvement;    /**< Impurity improvement given parent node. */
+  double impurity_left;  /**< Impurity of the left split. */
+  double impurity_right; /**< Impurity of the right split. */
 } SplitRecord;
 
 typedef struct Splitter {
-    size_t* samples;
-    size_t start;
-    size_t end;
+  size_t *samples;
+  size_t start;
+  size_t end;
 
-    size_t* features;
-    size_t* constant_features;
-    size_t n_features;
+  size_t *features;
+  size_t *constant_features;
+  size_t n_features;
 
-    double_t* Xf;
-    size_t max_features;
-    size_t min_samples_leaf;
+  double_t *Xf;
+  size_t max_features;
+  size_t min_samples_leaf;
 
 } Splitter;
 
@@ -102,13 +104,53 @@ typedef struct Splitter {
 
 // } Tree;
 
+/**
+ * @struct CommandArray array of commands to be sent to the DPUs
+ **/
+struct CommandArray {
+  uint32_t nb_cmds;
+  struct Command cmds[MAX_NB_LEAF];
+};
+
+/**
+ * @struct CommandResults holds the results of SPLIT_EVALUATE and SPLIT_MINMAX
+ * commands for each leaf of one DPU
+ **/
+struct CommandResults {
+  uint32_t nb_gini;
+  uint32_t nb_minmax;
+  uint32_t gini_cnt[MAX_NB_LEAF * MAX_CLASSES];
+  feature_t min_max[MAX_NB_LEAF * 2];
+};
+
 // Function declarations
 /** @name dpu_management.c */
 /**@{*/
 void allocate(Params *p);
 void free_dpus(Params *p);
 void load_kernel(Params *p, const char *DPU_BINARY);
-void populateDpu(Params *p, float **features);
+/**
+ * @brief prepare the buffers to be sent to the DPUs and send the
+ * features and targets
+ **/
+void populateDpu(Params *p, feature_t **features, feature_t *targets);
+
+/**
+ * @brief add a new command to a CommandArray
+ **/
+void addCommand(struct CommandArray *arr, struct Command cmd);
+
+/**
+ * @brief Send a CommandArray to all DPUs and launch them.
+ * The launch is asynchronous.
+ **/
+void pushCommandArray(Params *p, struct CommandArray *arr);
+
+/**
+ * @brief Wait for the DPUs to finish the commands and retrieve the
+ * results
+ **/
+void syncCommandArrayResults(Params *p, struct CommandResults **res);
 /**@}*/
 
 /** @name input.c */

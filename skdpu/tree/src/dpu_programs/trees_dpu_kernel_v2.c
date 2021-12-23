@@ -78,6 +78,14 @@ __mram feature_t min_max_feature[MAX_NB_LEAF * 2];
 MUTEX_INIT(minmax_mutex);
 
 /**
+ * @brief array to store the index
+ * where to put results for SPLIT_EVALUATE or SPLIT_MINMAX
+ * The indexes are assigned in the same order as the order
+ * of commands.
+ **/
+uint16_t res_indexes[MAX_NB_LEAF];
+
+/**
  * @brief the points in one tree leaf are stored consecutively in MRAM
  * This order is maitained after a split commit by reordering the t_features and
  * the t_targets arrays in MRAM leaf_start_index is the index of the first point
@@ -85,7 +93,7 @@ MUTEX_INIT(minmax_mutex);
  * index of the next leaf
  **/
 __host uint32_t n_leaves;
-__host uint32_t start_n_leaves;
+uint32_t start_n_leaves;
 __host uint32_t leaf_start_index[MAX_NB_LEAF];
 __host uint32_t leaf_end_index[MAX_NB_LEAF];
 MUTEX_INIT(n_leaves_mutex);
@@ -222,12 +230,13 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
     if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
       // first batch of this SPLIT_EVALUATE command
       // Need to initialize the gini_cnt for this leaf
-      uint32_t start_index = cmds_array[*index_cmd].leaf_index * 2 * n_classes;
+      uint32_t start_index =
+          res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
       memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
     } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
       // initialize min_max_feature for this leaf
       // TODO here assume that feature_t is a multiple of 4
-      uint32_t start_index = cmds_array[*index_cmd].leaf_index * 2;
+      uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
       mram_write(min_max_init, &min_max_feature[start_index],
                  2 * sizeof(feature_t));
     }
@@ -235,9 +244,6 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
   mutex_unlock(batch_mutex);
   return res;
 }
-
-#define ALIGN_8_LOW(x) (((x) >> 3) << 3)
-#define ALIGN_8_HIGH(x) (((x + 7) >> 3) << 3)
 
 /**
  * @brief load features from MRAM to WRAM for a batch, while taking care of
@@ -333,7 +339,7 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
 #ifdef DEBUG
   printf("update gini count %u leaf %u\n", me(), leaf_index);
 #endif
-  uint32_t start_index = leaf_index * 2 * n_classes;
+  uint32_t start_index = res_indexes[leaf_index] * 2 * n_classes;
   mram_read(&gini_cnt[start_index], c_gini_cnt[me()],
             2 * n_classes * sizeof(uint32_t));
 
@@ -443,9 +449,9 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
   // update the min max in MRAM
   mutex_lock(minmax_mutex);
   __dma_aligned feature_t c_minmax[2];
-  uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
+  uint16_t res_index = res_indexes[cmds_array[index_cmd].leaf_index];
   // TODO here assume that sizeof(feature_t) is a multiple of 4 bytes
-  mram_read(&min_max_feature[leaf_index * 2], c_minmax, 2 * sizeof(feature_t));
+  mram_read(&min_max_feature[res_index * 2], c_minmax, 2 * sizeof(feature_t));
   bool write = false;
   if (min < c_minmax[0]) {
     c_minmax[0] = min;
@@ -462,7 +468,7 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
          write);
 #endif
   if (write)
-    mram_write(c_minmax, &min_max_feature[leaf_index * 2],
+    mram_write(c_minmax, &min_max_feature[res_index * 2],
                2 * sizeof(feature_t));
   mutex_unlock(minmax_mutex);
 
@@ -976,6 +982,19 @@ static uint16_t get_new_leaf_index(uint16_t index_cmd) {
   return start_n_leaves + n_commits;
 }
 
+static void gen_res_indexes() {
+
+  uint16_t index_gini = 0;
+  uint16_t index_minmax = 0;
+  for (int i = 0; i < nb_cmds; ++i) {
+    if (cmds_array[i].type == SPLIT_EVALUATE) {
+      res_indexes[cmds_array[i].leaf_index] = index_gini++;
+    } else if (cmds_array[i].type == SPLIT_MINMAX) {
+      res_indexes[cmds_array[i].leaf_index] = index_minmax++;
+    }
+  }
+}
+
 BARRIER_INIT(barrier, NR_TASKLETS);
 
 // define the TEST variable to run the unit tests
@@ -1022,6 +1041,7 @@ int main() {
     cmd_cnt = 0;
     memset(cmd_tasklet_cnt, 0, nb_cmds);
     start_n_leaves = n_leaves;
+    gen_res_indexes();
   }
   barrier_wait(&barrier);
 
