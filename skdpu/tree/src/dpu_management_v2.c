@@ -179,8 +179,14 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   }
 
   // transfer meta-data to DPU
-  DPU_ASSERT(dpu_broadcast_to(p->allset, "n_points", 0, &(p->npoints),
-                              sizeof(uint64_t), DPU_XFER_ASYNC));
+  DPU_RANK_FOREACH(p->allset, rank, each_rank) {
+    DPU_FOREACH(rank, dpu, each_dpu) {
+      DPU_ASSERT(dpu_prepare_xfer(
+          dpu, &(cb_args[each_rank].nr_points_per_dpu[each_dpu])));
+    }
+  }
+  DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "n_points", 0,
+                           sizeof(uint32_t), DPU_XFER_ASYNC));
   DPU_ASSERT(dpu_broadcast_to(p->allset, "n_features", 0, &(p->nfeatures),
                               sizeof(uint32_t), DPU_XFER_ASYNC));
   DPU_ASSERT(dpu_broadcast_to(p->allset, "n_classes", 0, &(p->ntargets),
