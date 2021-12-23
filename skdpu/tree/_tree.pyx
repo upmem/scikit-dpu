@@ -5,14 +5,14 @@
 import numpy as np
 cimport numpy as np
 
-from sklearn.tree._utils cimport PriorityHeap
-from sklearn.tree._utils cimport PriorityHeapRecord
+from ._utils cimport Set
+from ._utils cimport SetRecord
 
 # =============================================================================
 # Types and constants
 # =============================================================================
 
-cdef double INFINITY=np.inf
+cdef double INFINITY = np.inf
 
 # Some handy constants (DpuTreeBuilder)
 cdef int IS_FIRST = 1
@@ -28,16 +28,14 @@ cdef SIZE_t INITIAL_STACK_SIZE = 10
 
 # DPU Breadth first builder ----------------------------------------------------------
 
-cdef inline int _add_to_frontier(PriorityHeapRecord* rec,
-                                 PriorityHeap frontier) nogil except -1:
-    """Adds record ``rec`` to the priority queue ``frontier``
+cdef inline int _add_to_frontier(SetRecord * rec,
+                                 Set frontier) nogil except -1:
+    """Adds record ``rec`` to the active leaf set ``frontier``
 
     Returns -1 in case of failure to allocate memory (and raise MemoryError)
     or 0 otherwise.
     """
-    return frontier.push(rec.node_id, rec.start, rec.end, rec.pos, rec.depth,
-                         rec.is_leaf, rec.improvement, rec.impurity,
-                         rec.impurity_left, rec.impurity_right)
+    return frontier.push(rec.node_id, rec.depth, rec.parent, rec.is_leaf, rec.impurity, rec.n_constant_features)
 
 cdef class DpuTreeBuilder(TreeBuilder):
     """Build a decision tree in a breadth-first fashion in parallel"""
@@ -50,7 +48,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
 
-    cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None):
+    cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None) nogil except -1:
         """Build a decision tree from the training set (X,y)"""
 
         # check input
@@ -79,12 +77,17 @@ cdef class DpuTreeBuilder(TreeBuilder):
         # Recursive partition (without actual recursion)
         splitter.init(X, y, sample_weight_ptr)
 
-        cdef PriorityHeap frontier = PriorityHeap(INITIAL_STACK_SIZE)
-        cdef PriorityHeapRecord record
-        cdef PriorityHeapRecord split_node_left
-        cdef PriorityHeapRecord split_node_right
+        cdef Set frontier = Set(INITIAL_STACK_SIZE)
+        cdef SetRecord* record
+        cdef SetRecord* split_node_left
+        cdef SetRecord* split_node_right
 
         cdef SIZE_t n_node_samples = splitter.n_samples
+        cdef SIZE_t frontier_length
+        cdef bint has_minmax
+        cdef bint has_evaluated
+        cdef int rc = 0
+        cdef Node* node
 
         with nogil:
             # add root to frontier
@@ -99,11 +102,92 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     raise MemoryError()
 
             while not frontier.is_empty():
+                # fill instruction list
+                # TODO: add queue clear
+                frontier_length = frontier.top
+                for i_record in range(frontier_length):
+                    record = frontier.set_[i_record]
 
+                    node = &tree.nodes[record.node_id]
+                    has_minmax = record.has_minmax
+                    has_evaluated = record.has_evaluated
 
-    cdef inline int _add_split_node(self, Splitter splitter, Tree tree,
-                                    SIZE_t start, SIZE_t end, double impurity,
-                                    bint is_first, bint is_left, Node* parent,
-                                    SIZE_t depth,
-                                    PriorityHeapRecord* res) nogil except -1:
+                    if not has_minmax:
+                        # TODO: add minmax instruction to queue
+                        rc = add_minmax_instruction()
+                        if rc == -1:
+                            break
+
+                    elif not has_evaluated:
+                        # TODO: add split evaluate instruction
+                        rc = add_evaluate_instruction()
+                        if rc == -1:
+                            break
+
+                    else:
+                        # TODO: add split commit instruction
+                        rc = add_commit_instruction()
+                        if rc == -1:
+                            break
+
+                # execute instruction list on DPUs
+                # TODO; add call to instruction set execution
+                rc = execute_instructions()
+
+                #parse and process DPU output
+                for i_record in range(frontier_length):
+                    record = &frontier.set_[i_record]
+
+                    node = &tree.nodes[record.node_id]
+                    has_minmax = record.has_minmax
+                    has_evaluated = record.has_evaluated
+
+                    if not has_minmax:
+                        # TODO: parse minmax result
+                        rc = update_minmax()
+                        if rc == -1:
+                            break
+                        record.has_minmax = True
+
+                    elif not has_evaluated:
+                        # TODO: parse evaluate result
+                        rc = update_evaluation()
+                        if rc == -1:
+                            break
+                        if record.splitter.finished_evaluation():
+                            record.has_evaluated = True
+
+                    else:
+                        # TODO: deal with commit result
+                        # Compute left split node
+                        rc = self._add_split_node(&split_node_left)
+                        if rc == -1:
+                            break
+
+                        # tree.nodes may have changed
+                        node = &tree.nodes[record.node_id]
+
+                        # Compute right split node
+                        rc = self._add_split_node(&split_node_right)
+                        if rc == -1:
+                            break
+
+                        # Add nodes to queue
+                        rc = _add_to_frontier(&split_node_left)
+                        if rc == -1:
+                            break
+
+                        rc = _add_to_frontier(&split_node_right)
+                        if rc == -1:
+                            break
+
+                frontier.prune_leaves()
+
+            if rc >= 0:
+                rc = tree._resize_c(tree.node_count)
+
+        if rc == -1:
+            raise MemoryError()
+
+    cdef inline int _add_split_node(self) nogil except -1:
         pass

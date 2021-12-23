@@ -54,8 +54,6 @@ cdef class Set:
 
         set_ = self.set_
         set_[top].node_id = node_id
-        set_[top].start = start
-        set_[top].end = end
         set_[top].depth = depth
         set_[top].parent = parent
         set_[top].is_leaf = is_leaf
@@ -76,4 +74,16 @@ cdef class Set:
                 raise ValueError("Trying to remove wrong element from the frontier set.")
 
         self.top = top - 1
+        return 0
+
+    cdef int prune_leaves(self) nogil:
+        """Removes all leaves from the set"""
+        cdef SIZE_t top = self.top
+        cdef SIZE_t i_record = 0
+        while i_record < top:
+            if self.set_[i_record].is_leaf:
+                self.remove(i_record)
+                top -= 1
+            else:
+                i_record += 1
         return 0

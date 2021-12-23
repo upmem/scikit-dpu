@@ -9,3 +9,8 @@ from sklearn.tree._tree cimport INT32_t          # Signed 32 bit integer
 from sklearn.tree._tree cimport UINT32_t         # Unsigned 32 bit integer
 
 from sklearn.tree._splitter cimport SplitRecord
+
+cdef class RandomDpuSplitter:
+    cdef SIZE_t* features  # Feature indices in X
+
+    cdef bint finished_evaluation(self) nogil
