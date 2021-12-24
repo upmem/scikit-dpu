@@ -60,7 +60,7 @@ __host struct Command cmds_array[MAX_NB_LEAF];
 /**
  * @brief number of commands in the array
  **/
-__host uint16_t nb_cmds;
+__host uint32_t nb_cmds;
 
 /**
  * @brief array to store the scores or gini count for each leaf and classes.

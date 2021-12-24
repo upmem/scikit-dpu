@@ -1,0 +1,3 @@
+leaf = 2
+feature = 0
+threshold = 7.812240563584586

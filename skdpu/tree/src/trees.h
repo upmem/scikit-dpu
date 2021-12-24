@@ -119,7 +119,7 @@ struct CommandArray {
 struct CommandResults {
   uint32_t nb_gini;
   uint32_t nb_minmax;
-  uint32_t gini_cnt[MAX_NB_LEAF * MAX_CLASSES];
+  uint32_t gini_cnt[MAX_NB_LEAF * 2 * MAX_CLASSES];
   feature_t min_max[MAX_NB_LEAF * 2];
 };
 
@@ -150,7 +150,8 @@ void pushCommandArray(Params *p, struct CommandArray *arr);
  * @brief Wait for the DPUs to finish the commands and retrieve the
  * results
  **/
-void syncCommandArrayResults(Params *p, struct CommandResults **res);
+void syncCommandArrayResults(Params *p, struct CommandArray *cmd_arr,
+                             struct CommandResults *res);
 /**@}*/
 
 /** @name input.c */

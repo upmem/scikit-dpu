@@ -1,0 +1,3 @@
+nfeatures = 4
+npoints = 150
+nclasses = 3

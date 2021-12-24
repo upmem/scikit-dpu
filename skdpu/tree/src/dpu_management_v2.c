@@ -68,7 +68,7 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
 
   bool is_target = true;
   for (uint32_t each_dpu = 0; each_dpu < nr_dpus_rank; ++each_dpu)
-    is_target = cb_args->feature_index[each_dpu] == cb_args->n_features;
+    is_target &= cb_args->feature_index[each_dpu] == cb_args->n_features;
 
   for (uint32_t each_dpu = 0; each_dpu < nr_dpus_rank; ++each_dpu) {
     uint32_t batch_index = 0;
@@ -158,6 +158,12 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
                             &cb_args, DPU_CALLBACK_ASYNC));
 
+    DPU_RANK_FOREACH(p->allset, rank, each_rank) {
+      DPU_FOREACH(rank, dpu, each_dpu) {
+        DPU_ASSERT(dpu_prepare_xfer(
+            dpu, cb_args[each_rank].dpu_features_buffer[each_dpu]));
+      }
+    }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
       size = (p->npoints * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
@@ -176,6 +182,13 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
                             &cb_args, DPU_CALLBACK_ASYNC));
 
+    // TODO the DPU_XFER_NO_RESET flag does not seem to work with async
+    DPU_RANK_FOREACH(p->allset, rank, each_rank) {
+      DPU_FOREACH(rank, dpu, each_dpu) {
+        DPU_ASSERT(dpu_prepare_xfer(
+            dpu, cb_args[each_rank].dpu_features_buffer[each_dpu]));
+      }
+    }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
       size = p->npoints - (i * SIZE_BATCH_POINT_TRANSFER);
@@ -247,8 +260,8 @@ void pushCommandArray(Params *p, struct CommandArray *arr) {
   DPU_ASSERT(dpu_launch(p->allset, DPU_ASYNCHRONOUS));
 }
 
-void syncCommandArray(Params *p, struct CommandArray *arr,
-                      struct CommandResults **res) {
+void syncCommandArrayResults(Params *p, struct CommandArray *arr,
+                             struct CommandResults *res) {
 
   // first compute how many split evaluate and split min max commands were sent
   uint32_t nb_gini_cmds = 0, nb_min_max_cmds = 0;
@@ -262,20 +275,25 @@ void syncCommandArray(Params *p, struct CommandArray *arr,
   // transfer results
   struct dpu_set_t dpu;
   uint32_t each_dpu;
-  DPU_FOREACH(p->allset, dpu, each_dpu) {
-    res[each_dpu]->nb_gini = nb_gini_cmds;
-    DPU_ASSERT(dpu_prepare_xfer(dpu, res[each_dpu]->gini_cnt));
+  if (nb_gini_cmds) {
+    DPU_FOREACH(p->allset, dpu, each_dpu) {
+      res[each_dpu].nb_gini = nb_gini_cmds;
+      DPU_ASSERT(dpu_prepare_xfer(dpu, res[each_dpu].gini_cnt));
+    }
+    DPU_ASSERT(dpu_push_xfer(
+        p->allset, DPU_XFER_FROM_DPU, "gini_cnt", 0,
+        ALIGN_8_HIGH(nb_gini_cmds * p->ntargets * 2 * sizeof(uint32_t)),
+        DPU_XFER_ASYNC));
   }
-  DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_FROM_DPU, "gini_cnt", 0,
-                           nb_gini_cmds * p->ntargets * sizeof(uint32_t),
-                           DPU_XFER_ASYNC));
-  DPU_FOREACH(p->allset, dpu, each_dpu) {
-    res[each_dpu]->nb_minmax = nb_min_max_cmds;
-    DPU_ASSERT(dpu_prepare_xfer(dpu, res[each_dpu]->min_max));
+  if (nb_min_max_cmds) {
+    DPU_FOREACH(p->allset, dpu, each_dpu) {
+      res[each_dpu].nb_minmax = nb_min_max_cmds;
+      DPU_ASSERT(dpu_prepare_xfer(dpu, res[each_dpu].min_max));
+    }
+    DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_FROM_DPU, "min_max_feature", 0,
+                             nb_min_max_cmds * 2 * sizeof(feature_t),
+                             DPU_XFER_ASYNC));
   }
-  DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_FROM_DPU, "min_max_feature", 0,
-                           nb_min_max_cmds * 2 * sizeof(feature_t),
-                           DPU_XFER_ASYNC));
 
   // sync all ranks
   DPU_ASSERT(dpu_sync(p->allset));
