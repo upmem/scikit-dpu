@@ -102,7 +102,9 @@ MUTEX_INIT(n_leaves_mutex);
  * @brief size of batch of features read at once for the SPLIT_EVALUATE and
  *SPLIT_COMMIT commands
  **/
-#define SIZE_BATCH 32
+#ifndef SIZE_BATCH
+#define SIZE_BATCH 64
+#endif
 
 /**
  * WRAM buffers for feature values, SIZE_BATCH per tasklet
@@ -112,11 +114,6 @@ __dma_aligned feature_t feature_values[NR_TASKLETS][SIZE_BATCH + 16];
 __dma_aligned feature_t feature_values2[NR_TASKLETS][SIZE_BATCH + 16];
 __dma_aligned feature_t feature_values3[NR_TASKLETS][SIZE_BATCH + 16];
 __dma_aligned feature_t feature_values4[NR_TASKLETS][SIZE_BATCH + 16];
-
-/**
- * @ brief WRAM buffer for classes values, SIZE_BATCH values per tasklet
- **/
-__dma_aligned feature_t classes_values[NR_TASKLETS][SIZE_BATCH + 16];
 
 /**
  * @brief WRAM buffers and mutex for the gini count
@@ -291,7 +288,7 @@ static feature_t *load_classes_values(uint32_t index_batch,
   // aligned on 8 bytes with a size also aligned on 8 bytes
 
   return load_feature_values(index_batch, n_features, size_batch,
-                             classes_values[me()]);
+                             feature_values2[me()]);
 }
 
 /**

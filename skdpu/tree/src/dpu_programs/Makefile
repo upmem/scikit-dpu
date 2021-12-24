@@ -10,7 +10,7 @@ compile_host:
 test: test/test*.h test/test_host.c
 
 test/test%.h: FORCE compile_host
-	dpu-clang -O2 -DNR_TASKLETS=16 -DDEBUG -DTEST -DTEST$* -o trees_dpu_kernel_v2 trees_dpu_kernel_v2.c
+	dpu-clang -O2 -DNR_TASKLETS=16 -DSIZE_BATCH=32 -DDEBUG -DTEST -DTEST$* -o trees_dpu_kernel_v2 trees_dpu_kernel_v2.c
 	./host > test/out_test$*
 
 test/test_host_split.c : FORCE compile_dpu
