@@ -1,3 +1,0 @@
-leaf = 1
-feature = 1
-threshold = 3.673683336248671
