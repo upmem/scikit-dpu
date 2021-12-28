@@ -76,3 +76,6 @@ _configtest.o.d
 
 # dpu binaries
 *.dpu
+
+# notebook checkpoints
+*.ipynb_checkpoints/
