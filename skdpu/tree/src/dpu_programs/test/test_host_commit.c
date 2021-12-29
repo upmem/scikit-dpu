@@ -103,6 +103,51 @@ int main() {
   pushCommandArray(&tree_params, &cmd_arr);
   syncCommandArrayResults(&tree_params, &cmd_arr, &res);
 
+  /***** end first commit *****/
+
+  /*struct dpu_set_t dpu;*/
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** second commit *****/
+  
+  cmd1.type = SPLIT_COMMIT;
+  cmd1.feature_index = 0;
+  cmd1.leaf_index = 0;
+  cmd1.feature_threshold = 6.377749;
+
+  cmd_arr.nb_cmds = 0;
+  addCommand(&cmd_arr, cmd1);
+  pushCommandArray(&tree_params, &cmd_arr);
+  syncCommandArrayResults(&tree_params, &cmd_arr, &res);
+
+  /***** end second commit *****/
+
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** third commit *****/
+  
+  cmd1.type = SPLIT_COMMIT;
+  cmd1.feature_index = 1;
+  cmd1.leaf_index = 0;
+  cmd1.feature_threshold = 4.014110;
+
+  cmd_arr.nb_cmds = 0;
+  addCommand(&cmd_arr, cmd1);
+  pushCommandArray(&tree_params, &cmd_arr);
+  syncCommandArrayResults(&tree_params, &cmd_arr, &res);
+
+  /***** end third commit *****/
+
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** first split *****/
+
   cmd1.type = SPLIT_EVALUATE;
   cmd1.feature_index = 0;
   cmd1.leaf_index = 1;
@@ -116,36 +161,73 @@ int main() {
   uint32_t expected_gini1[6] = {0, 0, 4, 0, 35, 12};
   check_gini_count(&res, expected_gini1);
 
-  /***** end first commit *****/
+  /***** end first split *****/
 
-  /***** second commit *****/
-  // cmd1.type = SPLIT_COMMIT;
-  // cmd1.feature_index = 0;
-  // cmd1.leaf_index = 0;
-  // cmd1.feature_threshold = 6.377749;
-
-  // addCommand(&cmd_arr, cmd1);
-  // pushCommandArray(&tree_params, &cmd_arr);
-  // syncCommandArrayResults(&tree_params, &cmd_arr, &res);
-
-  // cmd1.type = SPLIT_EVALUATE;
-  // cmd1.feature_index = 1;
-  // cmd1.leaf_index = 1;
-  // cmd1.feature_threshold = 4.167411513272327;
-
-  // cmd_arr.nb_cmds = 0;
-  // addCommand(&cmd_arr, cmd1);
-  // pushCommandArray(&tree_params, &cmd_arr);
-  // syncCommandArrayResults(&tree_params, &cmd_arr, &res);
-
-  // uint32_t expected_gini2[6] = {1, 2, 0, 0, 0, 0};
-  // check_gini_count(&res, expected_gini2);
-
-  /***** end second commit *****/
-
-  /*struct dpu_set_t dpu;*/
   /*DPU_FOREACH(tree_params.allset, dpu) {*/
-  /*dpu_log_read(dpu, stdout);*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** second split *****/
+
+  cmd1.type = SPLIT_EVALUATE;
+  cmd1.feature_index = 1;
+  cmd1.leaf_index = 3;
+  cmd1.feature_threshold = 4.167411513272327;
+
+  cmd_arr.nb_cmds = 0;
+  addCommand(&cmd_arr, cmd1);
+  pushCommandArray(&tree_params, &cmd_arr);
+  syncCommandArrayResults(&tree_params, &cmd_arr, &res);
+
+  uint32_t expected_gini2[6] = {1, 2, 0, 0, 0, 0};
+  check_gini_count(&res, expected_gini2);
+
+  /***** end second split *****/
+
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** third split *****/
+
+  cmd1.type = SPLIT_EVALUATE;
+  cmd1.feature_index = 2;
+  cmd1.leaf_index = 3;
+  cmd1.feature_threshold = 1.4751792133281754;
+
+  cmd_arr.nb_cmds = 0;
+  addCommand(&cmd_arr, cmd1);
+  pushCommandArray(&tree_params, &cmd_arr);
+  syncCommandArrayResults(&tree_params, &cmd_arr, &res);
+
+  uint32_t expected_gini3[6] = {1, 2, 0, 0, 0, 0};
+  check_gini_count(&res, expected_gini3);
+
+  /***** end third split *****/
+
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
+  /*}*/
+
+  /***** fourth split *****/
+
+  cmd1.type = SPLIT_EVALUATE;
+  cmd1.feature_index = 3;
+  cmd1.leaf_index = 1;
+  cmd1.feature_threshold = 1.6900613370821986;
+
+  cmd_arr.nb_cmds = 0;
+  addCommand(&cmd_arr, cmd1);
+  pushCommandArray(&tree_params, &cmd_arr);
+  syncCommandArrayResults(&tree_params, &cmd_arr, &res);
+
+  uint32_t expected_gini4[6] = {0, 0, 3, 1, 4, 43};
+  check_gini_count(&res, expected_gini4);
+
+  /***** end fourth split *****/
+
+  /*DPU_FOREACH(tree_params.allset, dpu) {*/
+    /*dpu_log_read(dpu, stdout);*/
   /*}*/
 
   return 0;

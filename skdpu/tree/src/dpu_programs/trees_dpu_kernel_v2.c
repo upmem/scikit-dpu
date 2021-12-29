@@ -251,7 +251,7 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
 static feature_t *load_feature_values(uint32_t index_batch,
                                       uint16_t feature_index,
                                       uint16_t size_batch,
-                                      feature_t *feature_values) {
+                                      feature_t *feature_values_in) {
 
   // Need to handle the constraint that MRAM read must be on a MRAM address
   // aligned on 8 bytes with a size also aligned on 8 bytes
@@ -268,13 +268,13 @@ static feature_t *load_feature_values(uint32_t index_batch,
       ALIGN_8_HIGH((size_batch + diff) * sizeof(feature_t)) / sizeof(feature_t);
 
   if (is_target)
-    mram_read(&t_targets[start_index_8align], feature_values,
+    mram_read(&t_targets[start_index_8align], feature_values_in,
               size_batch_8align * sizeof(feature_t));
   else
-    mram_read(&t_features[start_index_8align], feature_values,
+    mram_read(&t_features[start_index_8align], feature_values_in,
               size_batch_8align * sizeof(feature_t));
 
-  return feature_values + diff;
+  return feature_values_in + diff;
 }
 
 /**
@@ -300,7 +300,7 @@ static feature_t *load_classes_values(uint32_t index_batch,
  **/
 static void store_feature_values(uint32_t index_batch, uint16_t feature_index,
                                  uint16_t size_batch,
-                                 feature_t *feature_values) {
+                                 feature_t *feature_values_in) {
 
   // Need to handle the constraint that MRAM read must be on a MRAM address
   // aligned on 8 bytes with a size also aligned on 8 bytes
@@ -317,10 +317,10 @@ static void store_feature_values(uint32_t index_batch, uint16_t feature_index,
       ALIGN_8_HIGH((size_batch + diff) * sizeof(feature_t)) / sizeof(feature_t);
 
   if (is_target)
-    mram_write(feature_values, &t_targets[start_index_8align],
+    mram_write(feature_values_in, &t_targets[start_index_8align],
                size_batch_8align * sizeof(feature_t));
   else
-    mram_write(feature_values, &t_features[start_index_8align],
+    mram_write(feature_values_in, &t_features[start_index_8align],
                size_batch_8align * sizeof(feature_t));
 }
 
@@ -559,6 +559,12 @@ static void get_index_and_size_for_commit(uint16_t index_cmd,
                                           uint16_t feature_index,
                                           uint32_t *index, uint32_t *size) {
 
+  //FIXME this function will not work for disaligned case (odd number of points)
+  //Indeed the alignement will be different for different features, hence also
+  //the prolog/epilog and the order of points will not be the same for different features
+  if(feature_index == n_features)
+    feature_index = 0; // target case
+
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint32_t start_index =
       feature_index * n_points + leaf_start_index[leaf_index];
@@ -584,7 +590,7 @@ static void get_index_and_size_for_commit(uint16_t index_cmd,
 static void store_feature_values_noalign(uint32_t start_index,
                                          uint32_t feature_index,
                                          uint32_t size_batch,
-                                         feature_t *feature_values) {
+                                         feature_t *feature_values_in) {
 
   bool is_target = feature_index == n_features;
 
@@ -596,10 +602,10 @@ static void store_feature_values_noalign(uint32_t start_index,
   assert((size_batch * sizeof(feature_t) & 7) == 0);
 
   if (is_target)
-    mram_write(feature_values, &t_targets[start_index],
+    mram_write(feature_values_in, &t_targets[start_index],
                size_batch * sizeof(feature_t));
   else
-    mram_write(feature_values,
+    mram_write(feature_values_in,
                &t_features[feature_index * n_points + start_index],
                size_batch * sizeof(feature_t));
 }
@@ -610,17 +616,20 @@ static void store_feature_values_noalign(uint32_t start_index,
  * The buffer used for comparison to the threshold may be different than the
  * buffer on which values are reordered.
  **/
-static int partition_buffer(feature_t *feature_values,
+static int partition_buffer(feature_t *feature_values_in,
                             feature_t *feature_values_cmp, uint32_t size_batch,
                             feature_t feature_threshold) {
 
   int pivot = -1;
   assert(size_batch);
+  bool self = feature_values_in == feature_values_cmp;
   for (int j = 0; j < size_batch; j++) {
     if (feature_values_cmp[j] <= feature_threshold) {
       pivot++;
       if (pivot != j) {
-        swap(feature_values + pivot, feature_values + j);
+        swap(feature_values_in + pivot, feature_values_in + j);
+        if(!self)
+          swap(feature_values_cmp + pivot, feature_values_cmp + j);
       }
     }
   }
@@ -840,7 +849,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     feature_t *feature_values_prolog =
         load_feature_values(prolog_start, feature_index,
                             prolog_end - prolog_start, feature_values[me()]);
-    feature_t *feature_values_cmp =
+    feature_t *feature_values_prolog_cmp =
         load_feature_values(prolog_start, cmp_feature_index,
                             prolog_end - prolog_start, feature_values2[me()]);
 
@@ -858,11 +867,13 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                             feature_values3[me()]);
 
     uint32_t swap_index = 0;
+    feature_t lower_than_threshold = cmds_array[index_cmd].feature_threshold; 
     for (int i = 0; i < prolog_end - prolog_start; ++i) {
-      if (feature_values_cmp[i] > cmds_array[index_cmd].feature_threshold) {
+      if (feature_values_prolog_cmp[i] > cmds_array[index_cmd].feature_threshold) {
         assert(pivot);
         swap(&feature_values_prolog[i],
              &feature_values_pivot[max_n_elems_pivot - (++swap_index)]);
+        feature_values_prolog_cmp[i] = lower_than_threshold;
         if (swap_index >= max_n_elems_pivot)
           break;
       }
@@ -873,7 +884,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     if (pivot == start_index) {
       // need to also partition the remainder of the prolog
       uint32_t pivot_prolog = partition_buffer(
-          feature_values_prolog, feature_values_cmp, prolog_end - prolog_start,
+          feature_values_prolog, feature_values_prolog_cmp, prolog_end - prolog_start,
           cmds_array[index_cmd].feature_threshold);
       pivot = start_index + pivot_prolog;
       max_n_elems_pivot = prolog_end - prolog_start;
@@ -903,7 +914,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     feature_t *feature_values_epilog =
         load_feature_values(epilog_start, feature_index,
                             epilog_end - epilog_start, feature_values[me()]);
-    feature_t *feature_values_cmp =
+    feature_t *feature_values_epilog_cmp =
         load_feature_values(epilog_start, cmp_feature_index,
                             epilog_end - epilog_start, feature_values2[me()]);
 
@@ -917,9 +928,11 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
         pivot, feature_index, max_n_elems_pivot, feature_values3[me()]);
 
     uint32_t swap_index = 0;
+    feature_t bigger_than_threshold = cmds_array[index_cmd].feature_threshold + 1;
     for (int i = 0; i < epilog_end - epilog_start; ++i) {
-      if (feature_values_cmp[i] <= cmds_array[index_cmd].feature_threshold) {
+      if (feature_values_epilog_cmp[i] <= cmds_array[index_cmd].feature_threshold) {
         swap(&feature_values_epilog[i], &feature_values_pivot[swap_index++]);
+        feature_values_epilog_cmp[i] = bigger_than_threshold;
         if (swap_index >= max_n_elems_pivot)
           break;
       }
@@ -929,10 +942,11 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     pivot += swap_index;
     if (pivot >= epilog_start) {
       // need to also partition the remainder of the epilog
-      pivot += partition_buffer(feature_values_epilog, feature_values_cmp,
+      pivot += partition_buffer(feature_values_epilog, feature_values_epilog_cmp,
                                 epilog_end - epilog_start,
                                 cmds_array[index_cmd].feature_threshold);
-      max_n_elems_pivot = epilog_end - epilog_start;
+      //why ??
+      /*max_n_elems_pivot = epilog_end - epilog_start;*/
     }
     store_feature_values(epilog_start, feature_index, epilog_end - epilog_start,
                          feature_values[me()]);
@@ -948,7 +962,18 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     // the same side of the threshold
     // In this case it will be empty
 #ifdef DEBUG
+    /*mutex_lock(n_leaves_mutex);*/
     printf("pivot found %u\n", pivot);
+    /*printf("start index %u end index %u\n", leaf_start_index[leaf_index], leaf_end_index[leaf_index]);*/
+    /*printf("Points in old leaf (low):\n");*/
+    /*for(int i = 0; i < pivot; ++i) {*/
+      /*printf("%lf % lf %lf %lf %lf\n", t_features[i], t_features[n_points + i], t_features[2 * n_points + i], t_features[3 * n_points + i], t_targets[i]);*/
+    /*}*/
+    /*printf("Points in new leaf (high):\n");*/
+    /*for(int i = pivot; i < leaf_end_index[leaf_index]; ++i) {*/
+      /*printf("%lf % lf %lf %lf %lf\n", t_features[i], t_features[n_points + i], t_features[2 * n_points + i], t_features[3 * n_points + i], t_targets[i]);*/
+    /*}*/
+    /*mutex_unlock(n_leaves_mutex);*/
 #endif
     assert(index_new_leaf < MAX_NB_LEAF);
     uint32_t index_tmp = leaf_end_index[leaf_index];
