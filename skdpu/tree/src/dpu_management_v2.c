@@ -120,6 +120,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   uint32_t each_rank, each_dpu;
   uint32_t nr_points_dpu = p->npoints / p->ndpu;
   uint32_t points_rest = p->npoints - (nr_points_dpu * p->ndpu);
+  uint64_t n_points_align = ((p->npoints + 1) >> 1) << 1;
   uint32_t start_index_dpu = 0;
   uint32_t dpu_index = 0;
 
@@ -157,7 +158,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   // loop over all batches, first build the buffer of features for the DPU then
   // send it
   uint32_t nb_batches =
-      ((p->npoints * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
+      ((n_points_align * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
       SIZE_BATCH_POINT_TRANSFER;
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
@@ -172,7 +173,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = (p->npoints * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = (n_points_align * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_features",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
@@ -180,8 +181,8 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   }
 
   // Now handle the targets
-  nb_batches =
-      (p->npoints + SIZE_BATCH_POINT_TRANSFER - 1) / SIZE_BATCH_POINT_TRANSFER;
+  nb_batches = (n_points_align + SIZE_BATCH_POINT_TRANSFER - 1) /
+               SIZE_BATCH_POINT_TRANSFER;
 
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
@@ -197,7 +198,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = p->npoints - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = n_points_align - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_targets",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
