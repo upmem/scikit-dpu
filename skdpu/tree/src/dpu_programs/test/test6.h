@@ -28,6 +28,8 @@ static void test_init() {
           t_features[k] = 50;
         k++;
       }
+      // introduce the gap as the number of points is odd
+      t_features[k++] = 0;
     }
     n_classes = 4;
     for (int i = 0; i < n_points; ++i) {

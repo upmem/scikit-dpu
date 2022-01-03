@@ -52,18 +52,19 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
 
       if (l >= start_n_leaves || cmds_array[l].type == SPLIT_COMMIT) {
         if (expected_feature_values) {
+          uint32_t n_points_align = ((n_points + 1) >> 1) << 1;
           printf("split feature value:\n");
           for (int i = leaf_start_index[l]; i < leaf_end_index[l]; ++i) {
             printf("feature %u: %f\n", split_feature,
-                   t_features[split_feature * n_points + i]);
+                   t_features[split_feature * n_points_align + i]);
 #ifdef PRINT_ERROR_NO_ASSERT
-            if (t_features[split_feature * n_points + i] !=
+            if (t_features[split_feature * n_points_align + i] !=
                 expected_feature_values[split_feature * n_points + i])
               printf("ASSERT: feature value at index %u found %f expected %f\n",
-                     i, t_features[split_feature * n_points + i],
+                     i, t_features[split_feature * n_points_align + i],
                      expected_feature_values[split_feature * n_points + i]);
 #else
-            assert(t_features[split_feature * n_points + i] ==
+            assert(t_features[split_feature * n_points_align + i] ==
                    expected_feature_values[split_feature * n_points + i]);
 #endif
           }
@@ -72,16 +73,16 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
             if (f == split_feature)
               continue;
             for (int i = leaf_start_index[l]; i < leaf_end_index[l]; ++i) {
-              printf("feature %u: %f\n", f, t_features[f * n_points + i]);
+              printf("feature %u: %f\n", f, t_features[f * n_points_align + i]);
 #ifdef PRINT_ERROR_NO_ASSERT
-              if (t_features[split_feature * n_points + i] !=
+              if (t_features[split_feature * n_points_align + i] !=
                   expected_feature_values[split_feature * n_points + i])
                 printf(
                     "ASSERT: feature value at index %u found %f expected %f\n",
-                    i, t_features[f * n_points + i],
+                    i, t_features[f * n_points_align + i],
                     expected_feature_values[f * n_points + i]);
 #else
-              assert(t_features[f * n_points + i] ==
+              assert(t_features[f * n_points_align + i] ==
                      expected_feature_values[f * n_points + i]);
 #endif
             }

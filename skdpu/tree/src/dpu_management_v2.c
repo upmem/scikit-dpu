@@ -93,6 +93,12 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
       } else {
         cb_args->point_index[each_dpu] = 0;
         cb_args->feature_index[each_dpu]++;
+        // make sure that the start index of each feature is even
+        // this is to the fullfill 8-byte alignment required
+        // for the start of a feature on the DPU side.
+        if (batch_index & 1) {
+          cb_args->dpu_features_buffer[each_dpu][batch_index++] = 0;
+        }
       }
     }
   }
