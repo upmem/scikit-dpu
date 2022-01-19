@@ -405,3 +405,37 @@ cdef class GiniDpu(ClassificationCriterionDpu):
 
         impurity_left[0] = gini_left / self.n_outputs
         impurity_right[0] = gini_right / self.n_outputs
+
+    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil except -1:
+        cdef SIZE_t * n_classes = self.n_classes
+
+        cdef double* sum_left = self.sum_left
+        cdef double* sum_right = self.sum_right
+        cdef double* sum_total = self.sum_total
+        cdef double* weighted_n_left = &self.weighted_n_left
+        cdef double* weighted_n_right = &self.weighted_n_right
+        cdef double weighted_n_node_samples = self.weighted_n_node_samples
+
+        cdef SIZE_t c
+        cdef UINT32_t cnt
+
+        # Assuming here we have self.n_outputs = 1
+
+        weighted_n_left[0] = 0
+        record.n_left = 0
+        # Update left part
+        for c in range(n_classes[0]):
+            cnt = res.gini_cnt[eval_index * 2 * n_classes[0] + c]
+            sum_left[c] = cnt
+            weighted_n_left[0] += sum_left[c]
+            record.n_left += cnt
+
+        # Update right part
+        for c in range(n_classes[0]):
+            sum_right[c] = res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
+        weighted_n_right[0] = weighted_n_node_samples - weighted_n_left[0]
+        record.n_right = record.n_node_samples - record.n_left
+
+        # Update total
+        # for c in range(n_classes[0]):
+        #     sum_total[c] = sum_left[c] + sum_right[c]

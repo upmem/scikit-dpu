@@ -31,8 +31,6 @@ typedef struct Params {
   dpu_set allset;
   int from_file;
   int verbose;
-  float *features_mins;
-  float *features_maxes;
 } Params;
 
 /**
