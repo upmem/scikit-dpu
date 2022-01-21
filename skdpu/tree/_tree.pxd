@@ -12,6 +12,7 @@ from sklearn.tree._tree cimport UINT32_t         # Unsigned 32 bit integer
 
 ctypedef np.npy_uint8 UINT8_t
 ctypedef np.npy_uint16 UINT16_t
+ctypedef np.npy_uint64 UINT64_t
 
 from sklearn.tree._tree cimport Tree
 from sklearn.tree._tree cimport TreeBuilder

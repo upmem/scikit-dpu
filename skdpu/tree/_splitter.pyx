@@ -26,9 +26,8 @@ cdef extern from "src/trees.h":
     void allocate(Params *p)
     void free_dpus(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
+    void build_jagged_array(Params *p, DTYPE_t ** features, DTYPE_t * features_flat)
     void populateDpu(Params *p, float **features)
-    void query_min_max(SIZE_t current_feature, DTYPE_t* min_feature_value, DTYPE_t* max_feature_value)
-    void dpu_partition(DTYPE_t* current_threshold, SIZE_t* samples_left_leaf, SIZE_t* samples_right_leaf)
 
 cdef double INFINITY = np.inf
 
@@ -50,20 +49,30 @@ cdef class RandomDpuSplitter(Splitter):
 
     cdef SIZE_t n_total_samples
 
-    cdef int init(self,
+    cdef int init_dpu(self,
                   object X,
                   const DOUBLE_t[:, ::1] y,
-                  DOUBLE_t* sample_weight) except -1:
+                  DOUBLE_t* sample_weight,
+                  Params* p) except -1:
         """Initialize the splitter
 
         Returns -1 in case of failure to allocate memory (and raise MemoryError)
         or 0 otherwise.
         """
+        cdef char* dpu_binary = "src/dpu_programs/trees_dpu_kernel_v2"
+        cdef DTYPE_t ** features
 
         # Call parent init
         Splitter.init(self, X, y, sample_weight)
 
         self.X = X
+
+        allocate(p)
+        load_kernel(p, dpu_binary)
+        build_jagged_array(p, features, &X[0,0])
+        # TODO: free the pointer array at some point
+        populateDpu(p, features, &y[0,0])
+
         return 0
 
     # TODO: implement node_reset to put all the counters back to 0

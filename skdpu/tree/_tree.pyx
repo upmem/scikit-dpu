@@ -22,8 +22,25 @@ cdef extern from "src/trees_common.h":
         DTYPE_t feature_threshold
 
 cdef extern from "src/trees.h":
-    ctypedef struct Params:
+    ctypedef struct dpu_set:
         pass
+    ctypedef struct Params:
+        UINT64_t npoints
+        UINT64_t npadded
+        UINT64_t npointperdpu
+        UINT32_t nfeatures
+        UINT32_t ntargets
+        DTYPE_t scale_factor
+        DTYPE_t threshold
+        DTYPE_t * mean
+        int isOutput
+        int nloops
+        int max_iter
+        UINT32_t ndpu
+        dpu_set allset
+        int from_file
+        int verbose
+
     struct CommandArray:
         UINT32_t nb_cmds
         Command cmds[MAX_NB_LEAF]
@@ -32,6 +49,11 @@ cdef extern from "src/trees.h":
     void addCommmand(CommandArray * arr, Command cmd)
     void pushCommandArray(Params * p, CommandArray * arr)
     void syncCommandArrayResults(Params * p, CommandArray * cmd_arr, CommandResults * res);
+
+    void allocate(Params *p)
+    void free_dpus(Params *p)
+    void load_kernel(Params *p, const char *DPU_BINARY)
+    void populateDpu(Params *p, float ** features)
 
 # =============================================================================
 # Types and constants
@@ -105,7 +127,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef Params * p = self.p
 
         # Recursive partition (without actual recursion)
-        splitter.init(X, y, sample_weight_ptr)
+        splitter.init_dpu(X, y, sample_weight_ptr)
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
         cdef SetRecord * record
