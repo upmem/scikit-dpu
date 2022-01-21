@@ -20,3 +20,26 @@ from sklearn.tree._tree cimport Node
 from sklearn.tree._splitter cimport Splitter
 
 from sklearn.tree._splitter cimport SplitRecord
+
+cdef extern from "src/trees.h":
+    ctypedef struct dpu_set:
+        pass
+    ctypedef struct Params:
+        UINT64_t npoints
+        UINT64_t npadded
+        UINT64_t npointperdpu
+        UINT32_t nfeatures
+        UINT32_t ntargets
+        DTYPE_t scale_factor
+        DTYPE_t threshold
+        DTYPE_t * mean
+        int isOutput
+        int nloops
+        int max_iter
+        UINT32_t ndpu
+        dpu_set allset
+        int from_file
+        int verbose
+
+cdef class DpuTreeBuilder(TreeBuilder):
+    cdef Params* p

@@ -5,14 +5,28 @@
 import numpy as np
 cimport numpy as np
 
-from sklearn.tree._utils cimport safe_realloc
 from ._splitter cimport RandomDpuSplitter
 from sklearn.tree._splitter cimport SplitRecord
 
-ctypedef np.npy_intp SIZE_t  # Type for indices and counters
-
 cdef extern from "src/trees_common.h":
-    int MAX_CLASSES  # if there's a bug here try enum: MAX_CLASSES
+    enum: MAX_CLASSES  # if there's a bug here try enum: MAX_CLASSES
+
+ctypedef np.npy_float32 DTYPE_t          # Type of X
+ctypedef np.npy_float64 DOUBLE_t         # Type of y, sample_weight
+ctypedef np.npy_intp SIZE_t              # Type for indices and counters
+ctypedef np.npy_int32 INT32_t            # Signed 32 bit integer
+ctypedef np.npy_uint32 UINT32_t          # Unsigned 32 bit integer
+
+ctypedef fused realloc_ptr:
+    # Add pointer types here as needed.
+    (DTYPE_t*)
+    (SIZE_t*)
+    (unsigned char*)
+    (DOUBLE_t*)
+    (DOUBLE_t**)
+    (SetRecord*)
+
+cdef realloc_ptr safe_realloc(realloc_ptr* p, size_t nelems) nogil except *
 
 # =============================================================================
 # Table data structure

@@ -109,15 +109,17 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
  * @brief Builds a 2D jagged array (pointer array) from the pointer to the flat array of features.
  * 
  * @param p Algorithm parameters.
- * @param features [out] 2D array of features.
  * @param features_flat [in] flat array of features.
+ 
  */
-void build_jagged_array(Params *p, feature_t **features, feature_t *features_flat) {
+feature_t ** build_jagged_array(Params *p, feature_t *features_flat) {
+  feature_t ** features;
 
   features = (feature_t **)malloc(p->npoints * sizeof(*features));
   features[0] = features_flat;
   for (int i = 0; i < p->npoints; i++)
     features[i] = features[i - 1] + p->nfeatures;
+  return features;
 }
 
 #define SIZE_BATCH_POINT_TRANSFER (1024 * 256)

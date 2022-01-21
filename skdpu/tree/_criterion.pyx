@@ -15,7 +15,7 @@ np.import_array()
 from numpy.math cimport INFINITY
 
 from sklearn.tree._utils cimport log
-from sklearn.tree._utils cimport safe_realloc
+from ._utils cimport safe_realloc
 from sklearn.tree._utils cimport sizet_ptr_to_ndarray
 from sklearn.tree._utils cimport WeightedMedianCalculator
 

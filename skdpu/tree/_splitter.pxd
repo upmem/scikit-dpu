@@ -17,8 +17,8 @@ from ._criterion cimport GiniDpu
 from ._tree cimport UINT64_t
 
 cdef extern from "src/trees_common.h":
-    int MAX_CLASSES
-    int MAX_NB_LEAF
+    enum: MAX_CLASSES
+    enum: MAX_NB_LEAF
 
 cdef extern from "src/trees.h":
     ctypedef struct dpu_set:
@@ -46,16 +46,17 @@ cdef extern from "src/trees.h":
         DTYPE_t min_max[MAX_NB_LEAF * 2]
 
 cdef class RandomDpuSplitter(Splitter):
-    cdef SIZE_t * features  # Feature indices in X
     cdef SplitRecord best
     cdef SplitRecord current
+    cdef const DTYPE_t[:, :] X
+    cdef SIZE_t n_total_samples
 
     cdef int init_dpu(self,
         object X,
         const DOUBLE_t[:, ::1] y,
+        const DTYPE_t[:, ::,] y_float,
         DOUBLE_t* sample_weight,
         Params * p) except -1
-    cdef int init_record(self, SetRecord * record) nogil
     cdef int draw_feature(self, SetRecord * record) nogil
     cdef int impurity_improvement(self, double impurity, SplitRecord * split, SetRecord * record) nogil
     cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index) nogil

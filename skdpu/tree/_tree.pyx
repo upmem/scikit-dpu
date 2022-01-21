@@ -14,14 +14,14 @@ cdef extern from "src/trees_common.h":
     int SPLIT_EVALUATE
     int SPLIT_COMMIT
     int SPLIT_MINMAX
-    int MAX_NB_LEAF
+    enum: MAX_NB_LEAF
     struct Command:
         UINT8_t type
         UINT8_t feature_index
         UINT16_t leaf_index
         DTYPE_t feature_threshold
 
-cdef extern from "src/trees.h":
+cdef extern from "src/trees.h" nogil:
     ctypedef struct dpu_set:
         pass
     ctypedef struct Params:
@@ -76,29 +76,29 @@ cdef SIZE_t INITIAL_STACK_SIZE = 10
 
 # DPU Breadth first builder ----------------------------------------------------------
 
-cdef inline int _add_to_frontier(SetRecord * rec,
-                                 Set frontier) nogil except -1:
-    """Adds record ``rec`` to the active leaf set ``frontier``
-
-    Returns -1 in case of failure to allocate memory (and raise MemoryError)
-    or 0 otherwise.
-    """
-    return frontier.push(rec.n_node_samples, rec.depth, rec.parent, rec.is_left, rec.impurity, rec.n_constant_features,
-                         rec.weighted_n_node_samples)
+# cdef inline int _add_to_frontier(SetRecord * rec,
+#                                  Set frontier) nogil except -1:
+#     """Adds record ``rec`` to the active leaf set ``frontier``
+#
+#     Returns -1 in case of failure to allocate memory (and raise MemoryError)
+#     or 0 otherwise.
+#     """
+#     return frontier.push(rec.n_node_samples, rec.depth, rec.parent, rec.is_left, rec.impurity, rec.n_constant_features,
+#                          rec.weighted_n_node_samples)
 
 cdef class DpuTreeBuilder(TreeBuilder):
     """Build a decision tree in a breadth-first fashion in parallel"""
 
     def __cinit__(self, RandomDpuSplitter splitter, SIZE_t min_samples_split, SIZE_t min_samples_leaf, SIZE_t max_depth,
-                  double min_impurity_decrease, Params * p):
+                  double min_impurity_decrease):
         self.splitter = splitter
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
-        self.p = p
+        # TODO: update p from inside the build method
 
-    cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None) nogil except -1:
+    cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X,y)"""
 
         # check input
@@ -127,7 +127,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef Params * p = self.p
 
         # Recursive partition (without actual recursion)
-        splitter.init_dpu(X, y, sample_weight_ptr)
+        splitter.init_dpu(X, y, y, sample_weight_ptr, p)
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
         cdef SetRecord * record
@@ -146,7 +146,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef double weighted_n_node_samples
         cdef SIZE_t frontier_length
         cdef SIZE_t n_constant_features
-        cdef SIZE_t depth
         cdef double impurity = INFINITY
         cdef bint has_minmax
         cdef bint has_evaluated
@@ -167,7 +166,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         with nogil:
             # add root to frontier
-            rc = frontier.push_root(n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, weighted_n_samples)
+            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, INFINITY, 0, 0, record, splitter.n_features)
             if rc == -1:
                 with gil:
                     raise MemoryError()
@@ -181,7 +180,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                 # fill instruction list
                 frontier_length = frontier.top
                 for i_record in range(frontier_length):
-                    record = frontier.set_[i_record]
+                    record = &frontier.set_[i_record]
 
                     has_minmax = record.has_minmax
                     has_evaluated = record.has_evaluated
@@ -206,26 +205,26 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     # evaluating node
                     if not has_evaluated:
                         if not has_minmax:
-                            rc = splitter.draw_feature(&record)
+                            rc = splitter.draw_feature(record)
                             if rc == -1:
                                 break
 
                             # draw_feature might have declared that we finished evaluating the node
                             has_evaluated = record.has_evaluated
                             if not has_evaluated:
-                                rc = self.add_minmax_instruction(command, record, &cmd_arr)
+                                rc = add_minmax_instruction(command, record, &cmd_arr)
                                 if rc == -1:
                                     break
 
                         else:
-                            rc = self.add_evaluate_instruction(command, record, &cmd_arr)
+                            rc = add_evaluate_instruction(command, record, &cmd_arr)
                             if rc == -1:
                                 break
 
                     # finalizing node
                     if has_evaluated:
                         # checking if node should be split after computing its improvement
-                        rc = splitter.impurity_improvement(impurity, best, &record)
+                        rc = splitter.impurity_improvement(impurity, best, record)
                         if rc == -1:
                             break
                         is_leaf = (is_leaf or
@@ -233,7 +232,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         record.is_leaf = is_leaf
 
                         if not is_leaf:
-                            rc = self.add_commit_instruction(command, record, &cmd_arr)
+                            rc = add_commit_instruction(command, record, &cmd_arr)
                             if rc == -1:
                                 break
 
@@ -262,13 +261,13 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                     if not has_evaluated:
                         if not has_minmax:
-                            rc = splitter.draw_threshold(&record, &res, minmax_index)
+                            rc = splitter.draw_threshold(record, &res, minmax_index)
                             if rc == -1:
                                 break
                             minmax_index += 1
 
                         else:
-                            rc = splitter.update_evaluation(&record, &res, eval_index)
+                            rc = splitter.update_evaluation(record, &res, eval_index)
                             if rc == -1:
                                 break
                             eval_index += 1
@@ -302,10 +301,10 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                     else: # node is a leaf
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
-                                                 TREE_UNDEFINED, impurity, n_node_samples,
+                                                 _TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)
 
-                        node = tree.nodes[node_id]
+                        node = &tree.nodes[node_id]
                         node.left_child = _TREE_LEAF
                         node.right_child = _TREE_LEAF
 
@@ -317,33 +316,33 @@ cdef class DpuTreeBuilder(TreeBuilder):
         if rc == -1:
             raise MemoryError()
 
-    cdef inline int add_minmax_instruction(self, Command * command, SetRecord * record,
-                                           CommandArray * cmd_arr) nogil except -1:
-        """Adds a minmax instruction to the list."""
-        command.type = SPLIT_MINMAX
-        command.feature_index = record.current.feature
-        command.leaf_index = record.leaf_index
+cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
+                                       CommandArray * cmd_arr) nogil except -1:
+    """Adds a minmax instruction to the list."""
+    command.type = SPLIT_MINMAX
+    command.feature_index = record.current.feature
+    command.leaf_index = record.leaf_index
 
-        addCommmand(cmd_arr, *command)
+    addCommmand(cmd_arr, command[0])
 
-        return 0
+    return 0
 
-    cdef inline int add_evaluate_instruction(self, Command * command, SetRecord * record,
-                                             CommandArray * cmd_arr) nogil except -1:
-        """Adds a split evaluate instruction to the list."""
-        command.type = SPLIT_EVALUATE
-        command.feature_index = record.current.feature
-        command.leaf_index = record.leaf_index
-        command.feature_threshold = record.current.threshold
+cdef inline int add_evaluate_instruction(Command * command, SetRecord * record,
+                                         CommandArray * cmd_arr) nogil except -1:
+    """Adds a split evaluate instruction to the list."""
+    command.type = SPLIT_EVALUATE
+    command.feature_index = record.current.feature
+    command.leaf_index = record.leaf_index
+    command.feature_threshold = record.current.threshold
 
-        addCommmand(cmd_arr, *command)
+    addCommmand(cmd_arr, command[0])
 
-    cdef inline int add_commit_instruction(self, Command * command, SetRecord * record,
-                                           CommandArray * cmd_arr) nogil except -1:
-        """Adds a split commit instruction to the list."""
-        command.type = SPLIT_COMMIT
-        command.feature_index = record.best.feature
-        command.leaf_index = record.leaf_index
-        command.feature_threshold = record.best.threshold
+cdef inline int add_commit_instruction(Command * command, SetRecord * record,
+                                       CommandArray * cmd_arr) nogil except -1:
+    """Adds a split commit instruction to the list."""
+    command.type = SPLIT_COMMIT
+    command.feature_index = record.best.feature
+    command.leaf_index = record.leaf_index
+    command.feature_threshold = record.best.threshold
 
-        addCommmand(cmd_arr, *command)
+    addCommmand(cmd_arr, command[0])

@@ -127,7 +127,7 @@ struct CommandResults {
 void allocate(Params *p);
 void free_dpus(Params *p);
 void load_kernel(Params *p, const char *DPU_BINARY);
-void build_jagged_array(Params *p, feature_t **features, feature_t *features_flat);
+feature_t ** build_jagged_array(Params *p, feature_t *features_flat);
 /**
  * @brief prepare the buffers to be sent to the DPUs and send the
  * features and targets

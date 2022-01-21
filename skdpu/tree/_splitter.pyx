@@ -18,7 +18,7 @@ from sklearn.tree._utils cimport log
 from sklearn.tree._utils cimport rand_int
 from sklearn.tree._utils cimport rand_uniform
 from sklearn.tree._utils cimport RAND_R_MAX
-from sklearn.tree._utils cimport safe_realloc
+from ._utils cimport safe_realloc
 
 cdef extern from "src/trees.h":
     struct Params:
@@ -26,8 +26,8 @@ cdef extern from "src/trees.h":
     void allocate(Params *p)
     void free_dpus(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
-    void build_jagged_array(Params *p, DTYPE_t ** features, DTYPE_t * features_flat)
-    void populateDpu(Params *p, float **features)
+    DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
+    void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
 
 cdef double INFINITY = np.inf
 
@@ -45,13 +45,10 @@ cdef inline void _init_split(SplitRecord* self, SIZE_t start_pos) nogil:
 cdef class RandomDpuSplitter(Splitter):
     """Splitter for finding the best random split on DPU."""
 
-    cdef const DTYPE_t[:, :] X
-
-    cdef SIZE_t n_total_samples
-
     cdef int init_dpu(self,
                   object X,
                   const DOUBLE_t[:, ::1] y,
+                  const DTYPE_t[:, ::,] y_float,
                   DOUBLE_t* sample_weight,
                   Params* p) except -1:
         """Initialize the splitter
@@ -60,7 +57,7 @@ cdef class RandomDpuSplitter(Splitter):
         or 0 otherwise.
         """
         cdef char* dpu_binary = "src/dpu_programs/trees_dpu_kernel_v2"
-        cdef DTYPE_t ** features
+        cdef DTYPE_t ** features = NULL
 
         # Call parent init
         Splitter.init(self, X, y, sample_weight)
@@ -69,9 +66,9 @@ cdef class RandomDpuSplitter(Splitter):
 
         allocate(p)
         load_kernel(p, dpu_binary)
-        build_jagged_array(p, features, &X[0,0])
+        features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point
-        populateDpu(p, features, &y[0,0])
+        populateDpu(p, features, &y_float[0,0])
 
         return 0
 
@@ -201,13 +198,13 @@ cdef class RandomDpuSplitter(Splitter):
             record.has_minmax = True
 
             if record.current.threshold == max_feature_value:
-                record.threshold = min_feature_value
+                record.current.threshold = min_feature_value
 
         return 0
 
     cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil:
         """Reads the split evaluation results sent by the DPU and updates if current is better than best"""
-        (<GiniDpu>self.criterion).dpu_update(res, eval_index)
+        (<GiniDpu>self.criterion).dpu_update(record, res, eval_index)
         cdef double current_proxy_improvement
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()

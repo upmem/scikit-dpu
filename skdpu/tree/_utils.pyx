@@ -5,6 +5,7 @@
 from libc.stdlib cimport free
 from libc.stdlib cimport malloc
 from libc.string cimport memcpy
+from libc.stdlib cimport realloc
 
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
@@ -12,6 +13,23 @@ cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
 # =============================================================================
 # Table data structure
 # =============================================================================
+
+cdef realloc_ptr safe_realloc(realloc_ptr* p, size_t nelems) nogil except *:
+    # sizeof(realloc_ptr[0]) would be more like idiomatic C, but causes Cython
+    # 0.20.1 to crash.
+    cdef size_t nbytes = nelems * sizeof(p[0][0])
+    if nbytes / sizeof(p[0][0]) != nelems:
+        # Overflow in the multiplication
+        with gil:
+            raise MemoryError("could not allocate (%d * %d) bytes"
+                              % (nelems, sizeof(p[0][0])))
+    cdef realloc_ptr tmp = <realloc_ptr>realloc(p[0], nbytes)
+    if tmp == NULL:
+        with gil:
+            raise MemoryError("could not allocate %d bytes" % nbytes)
+
+    p[0] = tmp
+    return tmp  # for convenience
 
 cdef class Set:
     """A data structure for traversing.
@@ -25,17 +43,17 @@ cdef class Set:
     top : SIZE_t
         The number of elements currently in the set.
 
-    set_ : StackRecord pointer
+    set_ : SetRecord pointer
         The set of records.
     """
 
     def __cinit__(self, SIZE_t capacity):
         self.capacity = capacity
         self.top = 0
-        self.stack_ = <SetRecord *> malloc(capacity * sizeof(SetRecord))
+        self.set_ = <SetRecord*> malloc(capacity * sizeof(SetRecord))
 
     def __dealloc__(self):
-        free(self.stack_)
+        free(self.set_)
 
     cdef bint is_empty(self) nogil:
         return self.top <= 0
@@ -57,7 +75,7 @@ cdef class Set:
         if top >= self.capacity:
             self.capacity *= 2
             # Since safe_realloc can raise MemoryError, use `except -1`
-            safe_realloc(&self.stack_, self.capacity)
+            safe_realloc(&self.set_, self.capacity)
 
         top_record = &self.set_[top]
         top_record.leaf_index = leaf_index
@@ -96,7 +114,7 @@ cdef class Set:
             for i in range(n_features):
                 top_record.features[i] = i
 
-        # Increment stack pointer
+        # Increment set pointer
         self.top = top + 1
         return 0
 

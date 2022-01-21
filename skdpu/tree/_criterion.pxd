@@ -13,8 +13,8 @@ from sklearn.tree._criterion cimport Criterion
 from ._utils cimport SetRecord
 
 cdef extern from "src/trees_common.h":
-    int MAX_CLASSES
-    int MAX_NB_LEAF
+    enum: MAX_CLASSES
+    enum: MAX_NB_LEAF
 
 cdef extern from "src/trees.h":
     struct CommandResults:
