@@ -132,7 +132,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef bint is_left
         cdef bint first_seen
         cdef int rc = 0
-        cdef Node * node
+        cdef Node * node = NULL
         cdef Command * command
         cdef CommandArray cmd_arr
         cdef CommandResults res
@@ -145,7 +145,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         with nogil:
             # add root to frontier
-            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, weighted_n_samples)
+            rc = frontier.push_root(n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, weighted_n_samples)
             if rc == -1:
                 with gil:
                     raise MemoryError()
@@ -264,7 +264,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         # left child gets leaf index of its parent
                         n_node_samples = record.n_left
                         impurity = record.best.impurity_left
-                        # TODO: add array of feature index to SetRecord structure
                         rc = frontier.push(n_node_samples, depth + 1, node_id, True, impurity, n_constant_features,
                                            leaf_index, record, splitter.n_features)
                         if rc == -1:
@@ -274,13 +273,12 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         impurity = record.best.impurity_right
                         # right child gets first available leaf index
                         rc = frontier.push(n_node_samples, depth + 1, node_id, False, impurity, n_constant_features,
-                                           n_leaves)
+                                           n_leaves, record, splitter.n_features)
                         if rc == -1:
                             break
                         n_leaves += 1
 
-                    else:
-                        # TODO: add record to tree as leaf
+                    else: # node is a leaf
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
                                                  TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)

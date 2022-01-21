@@ -6,6 +6,9 @@ from libc.stdlib cimport free
 from libc.stdlib cimport malloc
 from libc.string cimport memcpy
 
+TREE_UNDEFINED = -2
+cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
+
 # =============================================================================
 # Table data structure
 # =============================================================================
@@ -48,6 +51,8 @@ cdef class Set:
         cdef SIZE_t top = self.top
         cdef SetRecord * top_record = NULL
 
+        cdef SIZE_t i
+
         # Resize if capacity not sufficient
         if top >= self.capacity:
             self.capacity *= 2
@@ -64,15 +69,32 @@ cdef class Set:
         top_record.n_constant_features = n_constant_features
         top_record.n_node_samples = n_node_samples
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
+        top_record.first_seen = True
 
-        # TODO: optimize this copy
-        memcpy(top_record.features, parent_record.features, n_features)
-        memcpy(top_record.constant_features, parent_record.constant_features, n_features)
+        # initializing loop variables
+        top_record.n_found_constants = 0
+        top_record.n_drawn_constants = 0
+        top_record.n_known_constants = n_constant_features
+        top_record.n_total_constants = n_constant_features
+        top_record.n_visited_features = 0
+        top_record.f_i = n_features
 
-        memcpy(top_record.features, parent_record.constant_features, sizeof(SIZE_t) * parent_record.n_known_constants)
-        memcpy(top_record.constant_features + parent_record.n_known_constants,
-               parent_record.features + parent_record.n_known_constants,
-               sizeof(SIZE_t) * parent_record.n_found_constants)
+        if not parent == _TREE_UNDEFINED:
+            # TODO: optimize this copy, or change the structure to not move records in it
+            memcpy(top_record.features, parent_record.features, sizeof(SIZE_t) * n_features)
+            memcpy(top_record.constant_features, parent_record.constant_features, sizeof(SIZE_t) * n_features)
+
+            # Respect invariant for constant features: the original order of
+            # element in features[:n_known_constants] must be preserved for sibling
+            # and child nodes
+            memcpy(top_record.features, parent_record.constant_features, sizeof(SIZE_t) * parent_record.n_known_constants)
+            # Copy newly found constant features
+            memcpy(top_record.constant_features + parent_record.n_known_constants,
+                   parent_record.features + parent_record.n_known_constants,
+                   sizeof(SIZE_t) * parent_record.n_found_constants)
+        else: # current node is the root
+            for i in range(n_features):
+                top_record.features[i] = i
 
         # Increment stack pointer
         self.top = top + 1

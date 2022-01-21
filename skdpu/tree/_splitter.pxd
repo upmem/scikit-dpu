@@ -30,7 +30,7 @@ cdef class RandomDpuSplitter(Splitter):
     cdef SplitRecord best
     cdef SplitRecord current
 
-    cdef bint finished_evaluation(self) nogil
+    cdef int init_record(self, SetRecord * record) nogil
     cdef int draw_feature(self, SetRecord * record) nogil
     cdef int impurity_improvement(self, double impurity, SplitRecord * split, SetRecord * record) nogil
     cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index) nogil
