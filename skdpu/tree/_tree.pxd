@@ -21,7 +21,7 @@ from sklearn.tree._splitter cimport Splitter
 
 from sklearn.tree._splitter cimport SplitRecord
 
-cdef extern from "src/trees.h":
+cdef extern from "src/trees.h" nogil:
     ctypedef struct dpu_set:
         pass
     ctypedef struct Params:

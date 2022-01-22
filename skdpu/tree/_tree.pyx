@@ -22,31 +22,12 @@ cdef extern from "src/trees_common.h":
         DTYPE_t feature_threshold
 
 cdef extern from "src/trees.h" nogil:
-    ctypedef struct dpu_set:
-        pass
-    ctypedef struct Params:
-        UINT64_t npoints
-        UINT64_t npadded
-        UINT64_t npointperdpu
-        UINT32_t nfeatures
-        UINT32_t ntargets
-        DTYPE_t scale_factor
-        DTYPE_t threshold
-        DTYPE_t * mean
-        int isOutput
-        int nloops
-        int max_iter
-        UINT32_t ndpu
-        dpu_set allset
-        int from_file
-        int verbose
-
     struct CommandArray:
         UINT32_t nb_cmds
         Command cmds[MAX_NB_LEAF]
     struct CommandResults:
         pass
-    void addCommmand(CommandArray * arr, Command cmd)
+    void addCommand(CommandArray * arr, Command cmd)
     void pushCommandArray(Params * p, CommandArray * arr)
     void syncCommandArrayResults(Params * p, CommandArray * cmd_arr, CommandResults * res);
 
@@ -323,7 +304,7 @@ cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
     command.feature_index = record.current.feature
     command.leaf_index = record.leaf_index
 
-    addCommmand(cmd_arr, command[0])
+    addCommand(cmd_arr, command[0])
 
     return 0
 
@@ -335,7 +316,7 @@ cdef inline int add_evaluate_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.current.threshold
 
-    addCommmand(cmd_arr, command[0])
+    addCommand(cmd_arr, command[0])
 
 cdef inline int add_commit_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:
@@ -345,4 +326,4 @@ cdef inline int add_commit_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.best.threshold
 
-    addCommmand(cmd_arr, command[0])
+    addCommand(cmd_arr, command[0])

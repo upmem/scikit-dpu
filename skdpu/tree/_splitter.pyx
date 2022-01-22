@@ -61,6 +61,8 @@ cdef class RandomDpuSplitter(Splitter):
 
         # Call parent init
         Splitter.init(self, X, y, sample_weight)
+        p.npoints = self.n_samples
+        p.nfeatures = self.n_features
 
         self.X = X
 
