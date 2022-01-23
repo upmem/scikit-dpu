@@ -13,14 +13,19 @@
 #include <stdint.h>
 
 /**
- * @brief Allocates all DPUs
+ * @brief Allocates all DPUs if p.ndpu is 0, else allocates p.ndpu DPUs
  *
  * @param p Algorithm parameters.
  */
 void allocate(Params *p) {
 
   assert(p);
-  DPU_ASSERT(dpu_alloc(p->ndpu, NULL, &(p->allset)));
+  if(p->ndpu == 0){
+    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, NULL, &(p->allset)));
+    DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
+  }
+  else
+    DPU_ASSERT(dpu_alloc(p->ndpu, NULL, &(p->allset)));
 }
 
 /**
@@ -129,6 +134,7 @@ feature_t ** build_jagged_array(Params *p, feature_t *features_flat) {
  */
 void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 
+  printf("populating DPUs\n"); // DEBUG
   uint32_t nr_ranks;
   DPU_ASSERT(dpu_get_nr_ranks(p->allset, &nr_ranks));
   struct callback_args *cb_args =
@@ -142,6 +148,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   uint32_t dpu_index = 0;
 
   // prepare the data necessary for the callback
+  printf("preparing the data necessary for the callback\n"); // DEBUG
   DPU_RANK_FOREACH(p->allset, rank, each_rank) {
     cb_args[each_rank].points = features;
     cb_args[each_rank].targets = targets;
@@ -174,6 +181,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 
   // loop over all batches, first build the buffer of features for the DPU then
   // send it
+  printf("looping over batches\n"); // DEBUG
   uint32_t nb_batches =
       ((n_points_align * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
       SIZE_BATCH_POINT_TRANSFER;
@@ -198,6 +206,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   }
 
   // Now handle the targets
+  printf("handling the targets\n"); // DEBUG
   nb_batches = (n_points_align + SIZE_BATCH_POINT_TRANSFER - 1) /
                SIZE_BATCH_POINT_TRANSFER;
 
@@ -223,6 +232,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   }
 
   // transfer meta-data to DPU
+  printf("transfering metadata\n"); // DEBUG
   DPU_RANK_FOREACH(p->allset, rank, each_rank) {
     DPU_FOREACH(rank, dpu, each_dpu) {
       DPU_ASSERT(dpu_prepare_xfer(
@@ -247,9 +257,11 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
                               sizeof(uint32_t), DPU_XFER_ASYNC));
 
   // synchronize all ranks
+  printf("synchronizing ranks\n"); // DEBUG
   DPU_ASSERT(dpu_sync(p->allset));
 
   // free memory
+  printf("freeing memory\n"); // DEBUG
   DPU_RANK_FOREACH(p->allset, rank, each_rank) {
     free(cb_args[each_rank].start_index_dpu);
     free(cb_args[each_rank].nr_points_per_dpu);
@@ -263,6 +275,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     free(cb_args[each_rank].dpu_features_buffer);
   }
   free(cb_args);
+  printf("done populating\n"); // DEBUG
 }
 
 void addCommand(struct CommandArray *arr, struct Command cmd) {

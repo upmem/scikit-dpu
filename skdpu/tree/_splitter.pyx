@@ -21,8 +21,6 @@ from sklearn.tree._utils cimport RAND_R_MAX
 from ._utils cimport safe_realloc
 
 cdef extern from "src/trees.h":
-    struct Params:
-        pass
     void allocate(Params *p)
     void free_dpus(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
@@ -48,7 +46,7 @@ cdef class RandomDpuSplitter(Splitter):
     cdef int init_dpu(self,
                   object X,
                   const DOUBLE_t[:, ::1] y,
-                  const DTYPE_t[:, ::,] y_float,
+                  const DTYPE_t[:, ::1] y_float,
                   DOUBLE_t* sample_weight,
                   Params* p) except -1:
         """Initialize the splitter
@@ -56,21 +54,30 @@ cdef class RandomDpuSplitter(Splitter):
         Returns -1 in case of failure to allocate memory (and raise MemoryError)
         or 0 otherwise.
         """
-        cdef char* dpu_binary = "src/dpu_programs/trees_dpu_kernel_v2"
+        cdef char* dpu_binary = "skdpu/tree/src/dpu_programs/trees_dpu_kernel_v2"
         cdef DTYPE_t ** features = NULL
 
         # Call parent init
+        print("initializeing base splitter")
         Splitter.init(self, X, y, sample_weight)
+        print("updating parameters")
         p.npoints = self.n_samples
         p.nfeatures = self.n_features
 
+        print("allocating X")
         self.X = X
 
+        print("allocating dpus")
+        p.ndpu = 1
         allocate(p)
+        print("loading kernel")
         load_kernel(p, dpu_binary)
+        print("building jagged array")
         features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point
+        print("populating dpu")
         populateDpu(p, features, &y_float[0,0])
+        print("finished init_dpu")
 
         return 0
 

@@ -70,17 +70,20 @@ cdef SIZE_t INITIAL_STACK_SIZE = 10
 cdef class DpuTreeBuilder(TreeBuilder):
     """Build a decision tree in a breadth-first fashion in parallel"""
 
-    def __cinit__(self, RandomDpuSplitter splitter, SIZE_t min_samples_split, SIZE_t min_samples_leaf, SIZE_t max_depth,
+    def __cinit__(self, RandomDpuSplitter splitter, SIZE_t min_samples_split, SIZE_t min_samples_leaf, double min_weight_leaf, SIZE_t max_depth,
                   double min_impurity_decrease):
         self.splitter = splitter
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
+        self.min_weight_leaf = min_weight_leaf
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
-        # TODO: update p from inside the build method
+        print("initialized the builder")
 
     cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X,y)"""
+
+        print("starting the build")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -105,10 +108,15 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef SIZE_t min_samples_split = self.min_samples_split
         cdef double min_impurity_decrease = self.min_impurity_decrease
 
-        cdef Params * p = self.p
+        cdef Params * p = &self.p
+
+        print("initing dem DPU")
 
         # Recursive partition (without actual recursion)
-        splitter.init_dpu(X, y, y, sample_weight_ptr, p)
+        y_float = y.astype(np.float32)
+        splitter.init_dpu(X, y, y_float, sample_weight_ptr, p)
+
+        print("inited dat DPU")
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
         cdef SetRecord * record
@@ -218,8 +226,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                 break
 
                 # execute instruction list on DPUs
-                pushCommandArray(self.p, &cmd_arr)
-                syncCommandArrayResults(self.p, &cmd_arr, &res)
+                pushCommandArray(p, &cmd_arr)
+                syncCommandArrayResults(p, &cmd_arr, &res)
 
                 minmax_index = 0
                 eval_index = 0

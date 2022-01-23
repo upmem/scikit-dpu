@@ -54,7 +54,7 @@ cdef class RandomDpuSplitter(Splitter):
     cdef int init_dpu(self,
         object X,
         const DOUBLE_t[:, ::1] y,
-        const DTYPE_t[:, ::,] y_float,
+        const DTYPE_t[:, ::1] y_float,
         DOUBLE_t* sample_weight,
         Params * p) except -1
     cdef int draw_feature(self, SetRecord * record) nogil
