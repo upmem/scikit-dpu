@@ -15,6 +15,9 @@ def configuration(parent_package="", top_path=None):
     if os.name == "posix":
         libraries.append("m")
 
+    extra_compile_args = ["-g"]
+    # extra_compile_args = ["-O3"]
+
     # compiling DPU binaries and adding them as a resource
     # print("Compiling DPU binary")
     output = subprocess.run(
@@ -39,7 +42,7 @@ def configuration(parent_package="", top_path=None):
         sources=["_dpu.pyx", "src/_dpu_c.c"],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
-        extra_compile_args=["-O3"],
+        extra_compile_args=extra_compile_args,
         define_macros=[("NB_CLUSTERS", "12")],
     )
     config.add_extension(
@@ -47,28 +50,28 @@ def configuration(parent_package="", top_path=None):
         sources=["_tree.pyx", "src/input.c", "src/dpu_management_v2.c"],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
-        extra_compile_args=["-O3"],
+        extra_compile_args=extra_compile_args,
     )
     config.add_extension(
         "_splitter",
         sources=["_splitter.pyx", "src/input.c", "src/dpu_management_v2.c"],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
-        extra_compile_args=["-O3"],
+        extra_compile_args=extra_compile_args,
     )
     config.add_extension(
         "_criterion",
         sources=["_criterion.pyx", "src/input.c", "src/dpu_management_v2.c"],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
-        extra_compile_args=["-O3"],
+        extra_compile_args=extra_compile_args,
     )
     config.add_extension(
         "_utils",
         sources=["_utils.pyx", "src/input.c", "src/dpu_management_v2.c"],
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
-        extra_compile_args=["-O3"],
+        extra_compile_args=extra_compile_args,
     )
 
     # config.add_subpackage("tests")

@@ -67,6 +67,7 @@ struct callback_args {
 dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
                                             uint32_t rank_id, void *args) {
 
+  printf("  callback | doing rank points vector callback on rank %d\n", rank_id); //DEBUG
   struct callback_args *cb_args = ((struct callback_args **)args)[rank_id];
   uint32_t nr_dpus_rank;
   DPU_ASSERT(dpu_get_nr_dpus(rank, &nr_dpus_rank));
@@ -107,6 +108,7 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
       }
     }
   }
+  printf("finished rank points vector callback on rank %d\n", rank_id); //DEBUG
   return DPU_OK;
 }
 
@@ -122,7 +124,7 @@ feature_t ** build_jagged_array(Params *p, feature_t *features_flat) {
 
   features = (feature_t **)malloc(p->npoints * sizeof(*features));
   features[0] = features_flat;
-  for (int i = 0; i < p->npoints; i++)
+  for (int i = 1; i < p->npoints; i++)
     features[i] = features[i - 1] + p->nfeatures;
   return features;
 }
@@ -135,6 +137,11 @@ feature_t ** build_jagged_array(Params *p, feature_t *features_flat) {
 void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 
   printf("populating DPUs\n"); // DEBUG
+  printf("number of features: %d\n", p->nfeatures);
+  printf("first point:\n");
+  for(uint32_t i = 0; i < p->nfeatures; i++)
+    printf("%f\n", features[0][i]);
+  printf("\n"); // DEBUG
   uint32_t nr_ranks;
   DPU_ASSERT(dpu_get_nr_ranks(p->allset, &nr_ranks));
   struct callback_args *cb_args =

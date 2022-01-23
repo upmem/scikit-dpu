@@ -9,6 +9,7 @@ from libc.stdlib cimport free
 from libc.stdlib cimport qsort
 from libc.string cimport memcpy
 from libc.string cimport memset
+from libc.stdio cimport printf
 
 import numpy as np
 cimport numpy as np
@@ -20,7 +21,7 @@ from sklearn.tree._utils cimport rand_uniform
 from sklearn.tree._utils cimport RAND_R_MAX
 from ._utils cimport safe_realloc
 
-cdef extern from "src/trees.h":
+cdef extern from "src/trees.h" nogil:
     void allocate(Params *p)
     void free_dpus(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
@@ -76,7 +77,8 @@ cdef class RandomDpuSplitter(Splitter):
         features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point
         print("populating dpu")
-        populateDpu(p, features, &y_float[0,0])
+        with nogil:
+            populateDpu(p, features, &y_float[0,0])
         print("finished init_dpu")
 
         return 0
@@ -191,6 +193,8 @@ cdef class RandomDpuSplitter(Splitter):
         min_feature_value = res.min_max[2 * minmax_index]
         max_feature_value = res.min_max[2 * minmax_index + 1]
 
+        printf("min: %f, max: %f\n", min_feature_value, max_feature_value)
+
         if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
             features[record.f_j], features[record.n_total_constants] = (
                 features[record.n_total_constants], record.current.feature)
@@ -218,10 +222,13 @@ cdef class RandomDpuSplitter(Splitter):
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
+        printf("old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
         if current_proxy_improvement > record.current_proxy_improvement:
             record.current_proxy_improvement = current_proxy_improvement
             record.best = record.current
             record.weighted_n_left = self.criterion.weighted_n_left
             record.weighted_n_right = self.criterion.weighted_n_right
+
+        record.has_minmax = False
 
         return 0

@@ -7,6 +7,7 @@ from libc.stdlib cimport free
 from libc.string cimport memcpy
 from libc.string cimport memset
 from libc.math cimport fabs
+from libc.stdio cimport printf
 
 import numpy as np
 cimport numpy as np
@@ -372,6 +373,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         impurity_right : double pointer
             The memory address to save the impurity of the right node to
         """
+        printf("evaluating children impurity\n") # DEBUG
         cdef SIZE_t* n_classes = self.n_classes
         cdef double* sum_left = self.sum_left
         cdef double* sum_right = self.sum_right
@@ -405,8 +407,11 @@ cdef class GiniDpu(ClassificationCriterionDpu):
 
         impurity_left[0] = gini_left / self.n_outputs
         impurity_right[0] = gini_right / self.n_outputs
+        printf("impurity_left %f\n", impurity_left[0])
+        printf("impurity_right %f\n", impurity_right[0])
 
     cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil except -1:
+        printf("updating the criterion\n")
         cdef SIZE_t * n_classes = self.n_classes
 
         cdef double* sum_left = self.sum_left
@@ -427,12 +432,16 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         for c in range(n_classes[0]):
             cnt = res.gini_cnt[eval_index * 2 * n_classes[0] + c]
             sum_left[c] = cnt
+            printf("read value: %i ", res.gini_cnt[eval_index * 2 * n_classes[0] + c])
+            printf("sum_left: %f\n", sum_left[c])
             weighted_n_left[0] += sum_left[c]
             record.n_left += cnt
 
         # Update right part
         for c in range(n_classes[0]):
             sum_right[c] = res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
+            printf("read value: %i ", res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c])
+            printf("sum_right: %f\n", sum_right[c])
         weighted_n_right[0] = weighted_n_node_samples - weighted_n_left[0]
         record.n_right = record.n_node_samples - record.n_left
 

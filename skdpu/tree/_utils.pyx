@@ -2,13 +2,17 @@
 #
 # License: MIT
 
+import numpy as np
+
 from libc.stdlib cimport free
 from libc.stdlib cimport malloc
 from libc.string cimport memcpy
 from libc.stdlib cimport realloc
+from libc.stdio cimport printf
 
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
+cdef double INFINITY = np.inf
 
 # =============================================================================
 # Table data structure
@@ -66,6 +70,7 @@ cdef class Set:
         Return -1 in case of failure to allocate memory (and raise MemoryError)
         or 0 otherwise.
         """
+        printf("pushing an element\n") # DEBUG
         cdef SIZE_t top = self.top
         cdef SetRecord * top_record = NULL
 
@@ -73,11 +78,13 @@ cdef class Set:
 
         # Resize if capacity not sufficient
         if top >= self.capacity:
+            printf("resizing the frontier") # DEBUG
             self.capacity *= 2
             # Since safe_realloc can raise MemoryError, use `except -1`
             safe_realloc(&self.set_, self.capacity)
 
         top_record = &self.set_[top]
+        printf("now looking at top record at index %d\n", top)
         top_record.leaf_index = leaf_index
         top_record.depth = depth
         top_record.parent = parent
@@ -88,6 +95,7 @@ cdef class Set:
         top_record.n_node_samples = n_node_samples
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
         top_record.first_seen = True
+        top_record.current_proxy_improvement = -INFINITY
 
         # initializing loop variables
         top_record.n_found_constants = 0
@@ -116,6 +124,7 @@ cdef class Set:
 
         # Increment set pointer
         self.top = top + 1
+        printf("done pushing\n") # DEBUG
         return 0
 
     cdef int remove(self, SIZE_t index) nogil:

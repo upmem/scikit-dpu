@@ -5,6 +5,8 @@
 import numpy as np
 cimport numpy as np
 
+from libc.stdio cimport printf
+
 from ._utils cimport Set
 from ._utils cimport SetRecord
 
@@ -15,6 +17,7 @@ cdef extern from "src/trees_common.h":
     int SPLIT_COMMIT
     int SPLIT_MINMAX
     enum: MAX_NB_LEAF
+    enum: MAX_CLASSES
     struct Command:
         UINT8_t type
         UINT8_t feature_index
@@ -26,7 +29,10 @@ cdef extern from "src/trees.h" nogil:
         UINT32_t nb_cmds
         Command cmds[MAX_NB_LEAF]
     struct CommandResults:
-        pass
+        UINT32_t nb_gini
+        UINT32_t nb_minmax
+        UINT32_t gini_cnt[MAX_NB_LEAF * 2 * MAX_CLASSES]
+        DTYPE_t min_max[MAX_NB_LEAF * 2]
     void addCommand(CommandArray * arr, Command cmd)
     void pushCommandArray(Params * p, CommandArray * arr)
     void syncCommandArrayResults(Params * p, CommandArray * cmd_arr, CommandResults * res);
@@ -143,7 +149,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef bint first_seen
         cdef int rc = 0
         cdef Node * node = NULL
-        cdef Command * command
+        cdef Command command
         cdef CommandArray cmd_arr
         cdef CommandResults res
 
@@ -153,6 +159,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef SIZE_t * features
         cdef SIZE_t * constant_features
 
+        print("entering nogil")
+        printf("handbrake is off\n")
         with nogil:
             # add root to frontier
             rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, INFINITY, 0, 0, record, splitter.n_features)
@@ -160,14 +168,18 @@ cdef class DpuTreeBuilder(TreeBuilder):
                 with gil:
                     raise MemoryError()
 
+            printf("incrementing n_leaves\n") #DEBUG
             n_leaves += 1
+            printf("added root to frontier\n") # DEBUG
 
             while not frontier.is_empty():
+                printf("\n\ndoing a new command layer\n") #DEBUG
                 # initializing the command array
                 cmd_arr.nb_cmds = 0
 
                 # fill instruction list
                 frontier_length = frontier.top
+                printf("frontier length : %d\n", frontier_length) #DEBUG
                 for i_record in range(frontier_length):
                     record = &frontier.set_[i_record]
 
@@ -180,12 +192,15 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     impurity = record.impurity
                     best = &record.best
 
+                    printf("record %d, depth %d\n", i_record, depth)
+
                     if first_seen:
                         # check if the node is eligible for splitting
                         is_leaf = (depth >= max_depth or
                                    n_node_samples < min_samples_split or
                                    n_node_samples < 2 * min_samples_leaf or
                                    weighted_n_node_samples < 2 * min_weight_leaf)
+                        printf("leaf status: %d\n", is_leaf)  #DEBUG
                         if is_leaf:
                             record.has_evaluated = True
                             record.is_leaf = True
@@ -194,6 +209,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     # evaluating node
                     if not has_evaluated:
                         if not has_minmax:
+                            printf("drawing a feature\n")  #DEBUG
                             rc = splitter.draw_feature(record)
                             if rc == -1:
                                 break
@@ -201,17 +217,20 @@ cdef class DpuTreeBuilder(TreeBuilder):
                             # draw_feature might have declared that we finished evaluating the node
                             has_evaluated = record.has_evaluated
                             if not has_evaluated:
-                                rc = add_minmax_instruction(command, record, &cmd_arr)
+                                printf("adding minmax instruction\n")  #DEBUG
+                                rc = add_minmax_instruction(&command, record, &cmd_arr)
                                 if rc == -1:
                                     break
+                                printf("successfully added minmax instruction\n")  #DEBUG
 
                         else:
-                            rc = add_evaluate_instruction(command, record, &cmd_arr)
+                            rc = add_evaluate_instruction(&command, record, &cmd_arr)
                             if rc == -1:
                                 break
 
                     # finalizing node
                     if has_evaluated:
+                        printf("we've evaluated\n")  #DEBUG
                         # checking if node should be split after computing its improvement
                         rc = splitter.impurity_improvement(impurity, best, record)
                         if rc == -1:
@@ -221,13 +240,17 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         record.is_leaf = is_leaf
 
                         if not is_leaf:
-                            rc = add_commit_instruction(command, record, &cmd_arr)
+                            rc = add_commit_instruction(&command, record, &cmd_arr)
                             if rc == -1:
                                 break
 
                 # execute instruction list on DPUs
+                printf("pushing command array\n")
                 pushCommandArray(p, &cmd_arr)
+                printf("syncing results\n")
                 syncCommandArrayResults(p, &cmd_arr, &res)
+                printf("received results\n")
+                printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
 
                 minmax_index = 0
                 eval_index = 0
@@ -257,6 +280,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                         else:
                             rc = splitter.update_evaluation(record, &res, eval_index)
+                            printf("updating evaluation\n")
                             if rc == -1:
                                 break
                             eval_index += 1
@@ -312,6 +336,8 @@ cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
     command.feature_index = record.current.feature
     command.leaf_index = record.leaf_index
 
+    printf("adding minmax on feature %d\n", command.feature_index) #DEBUG
+
     addCommand(cmd_arr, command[0])
 
     return 0
@@ -324,6 +350,8 @@ cdef inline int add_evaluate_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.current.threshold
 
+    printf("adding evaluate on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
+
     addCommand(cmd_arr, command[0])
 
 cdef inline int add_commit_instruction(Command * command, SetRecord * record,
@@ -333,5 +361,7 @@ cdef inline int add_commit_instruction(Command * command, SetRecord * record,
     command.feature_index = record.best.feature
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.best.threshold
+
+    printf("adding split on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
 
     addCommand(cmd_arr, command[0])
