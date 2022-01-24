@@ -170,7 +170,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
             # add root to frontier
             printf("adding root to frontier with %i samples\n", n_node_samples)
             # TODO: compute root node impurity (idea: make an evaluate with a threshold at infinity)
-            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, INFINITY, 0, 0, record, splitter.n_features)
+            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, 10.0, 0, 0, record, splitter.n_features)
             if rc == -1:
                 with gil:
                     raise MemoryError()
@@ -255,12 +255,13 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                 break
 
                 # execute instruction list on DPUs
-                printf("pushing command array\n")
-                pushCommandArray(p, &cmd_arr)
-                printf("syncing results\n")
-                syncCommandArrayResults(p, &cmd_arr, res)
-                printf("received results\n")
-                printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
+                if cmd_arr.nb_cmds:
+                    printf("pushing command array\n")
+                    pushCommandArray(p, &cmd_arr)
+                    printf("syncing results\n")
+                    syncCommandArrayResults(p, &cmd_arr, res)
+                    printf("received results\n")
+                    printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
 
                 minmax_index = 0
                 eval_index = 0
