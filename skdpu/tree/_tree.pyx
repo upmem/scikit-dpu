@@ -6,6 +6,7 @@ import numpy as np
 cimport numpy as np
 
 from libc.stdio cimport printf
+from libc.stdlib cimport malloc
 
 from ._utils cimport Set
 from ._utils cimport SetRecord
@@ -151,7 +152,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef Node * node = NULL
         cdef Command command
         cdef CommandArray cmd_arr
-        cdef CommandResults res
+        cdef CommandResults * res
 
         cdef SIZE_t minmax_index
         cdef SIZE_t eval_index
@@ -162,7 +163,13 @@ cdef class DpuTreeBuilder(TreeBuilder):
         print("entering nogil")
         printf("handbrake is off\n")
         with nogil:
+            # initializing the results array
+            # TODO: free it at some point
+            res = <CommandResults *>malloc(p.ndpu * sizeof(CommandResults))
+
             # add root to frontier
+            printf("adding root to frontier with %i samples\n", n_node_samples)
+            # TODO: compute root node impurity (idea: make an evaluate with a threshold at infinity)
             rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, INFINITY, 0, 0, record, splitter.n_features)
             if rc == -1:
                 with gil:
@@ -200,10 +207,13 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                    n_node_samples < min_samples_split or
                                    n_node_samples < 2 * min_samples_leaf or
                                    weighted_n_node_samples < 2 * min_weight_leaf)
+                        is_leaf = is_leaf or impurity <= EPSILON
                         printf("leaf status: %d\n", is_leaf)  #DEBUG
                         if is_leaf:
                             record.has_evaluated = True
+                            has_evaluated = True
                             record.is_leaf = True
+                            is_leaf = True
                         record.first_seen = False
 
                     # evaluating node
@@ -229,7 +239,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                 break
 
                     # finalizing node
-                    if has_evaluated:
+                    if has_evaluated and not is_leaf:
                         printf("we've evaluated\n")  #DEBUG
                         # checking if node should be split after computing its improvement
                         rc = splitter.impurity_improvement(impurity, best, record)
@@ -248,7 +258,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                 printf("pushing command array\n")
                 pushCommandArray(p, &cmd_arr)
                 printf("syncing results\n")
-                syncCommandArrayResults(p, &cmd_arr, &res)
+                syncCommandArrayResults(p, &cmd_arr, res)
                 printf("received results\n")
                 printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
 
@@ -273,14 +283,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                     if not has_evaluated:
                         if not has_minmax:
-                            rc = splitter.draw_threshold(record, &res, minmax_index)
+                            rc = splitter.draw_threshold(record, res, minmax_index, p)
                             if rc == -1:
                                 break
                             minmax_index += 1
 
                         else:
-                            rc = splitter.update_evaluation(record, &res, eval_index)
                             printf("updating evaluation\n")
+                            rc = splitter.update_evaluation(record, res, eval_index, p)
                             if rc == -1:
                                 break
                             eval_index += 1

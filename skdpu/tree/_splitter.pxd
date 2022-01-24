@@ -29,6 +29,7 @@ cdef extern from "src/trees.h":
         UINT64_t npointperdpu
         UINT32_t nfeatures
         UINT32_t ntargets
+        UINT32_t nclasses
         DTYPE_t scale_factor
         DTYPE_t threshold
         DTYPE_t * mean
@@ -59,5 +60,7 @@ cdef class RandomDpuSplitter(Splitter):
         Params * p) except -1
     cdef int draw_feature(self, SetRecord * record) nogil
     cdef int impurity_improvement(self, double impurity, SplitRecord * split, SetRecord * record) nogil
-    cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index) nogil
-    cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil
+    cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index, Params * p) nogil
+    cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, Params * p) nogil
+    cdef int node_split(self, double impurity, SplitRecord* split,
+                        SIZE_t* n_constant_features) nogil except -1

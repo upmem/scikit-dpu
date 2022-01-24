@@ -30,6 +30,7 @@ cdef extern from "src/trees.h":
         UINT64_t npointperdpu
         UINT32_t nfeatures
         UINT32_t ntargets
+        UINT32_t nclasses
         DTYPE_t scale_factor
         DTYPE_t threshold
         DTYPE_t * mean

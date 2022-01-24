@@ -250,7 +250,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
                            sizeof(uint32_t), DPU_XFER_ASYNC));
   DPU_ASSERT(dpu_broadcast_to(p->allset, "n_features", 0, &(p->nfeatures),
                               sizeof(uint32_t), DPU_XFER_ASYNC));
-  DPU_ASSERT(dpu_broadcast_to(p->allset, "n_classes", 0, &(p->ntargets),
+  DPU_ASSERT(dpu_broadcast_to(p->allset, "n_classes", 0, &(p->nclasses),
                               sizeof(uint32_t), DPU_XFER_ASYNC));
   uint32_t nleaves = 1;
   uint32_t leaf_start_index = 0;
@@ -315,6 +315,8 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
     else if (arr->cmds[i].type == SPLIT_MINMAX)
       nb_min_max_cmds++;
   }
+  res->nb_gini = nb_gini_cmds;
+  res->nb_minmax = nb_min_max_cmds;
 
   // transfer results
   struct dpu_set_t dpu;
@@ -326,7 +328,7 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
     }
     DPU_ASSERT(dpu_push_xfer(
         p->allset, DPU_XFER_FROM_DPU, "gini_cnt", 0,
-        ALIGN_8_HIGH(nb_gini_cmds * p->ntargets * 2 * sizeof(uint32_t)),
+        ALIGN_8_HIGH(nb_gini_cmds * p->nclasses * 2 * sizeof(uint32_t)),
         DPU_XFER_ASYNC));
   }
   if (nb_min_max_cmds) {
@@ -341,4 +343,15 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
 
   // sync all ranks
   DPU_ASSERT(dpu_sync(p->allset));
+  //DEBUG: print the transfered arrays
+  printf("array seen on C side\n");
+  for(uint32_t i=0; i < nb_gini_cmds; i++) {
+    printf("Gini command %i:\n", i);
+    DPU_FOREACH(p->allset, dpu, each_dpu) {
+      printf("DPU %i ", each_dpu);
+      for(uint32_t j=0; j < 2*p->nclasses; j++)
+        printf("%i ", res[each_dpu].gini_cnt[i * 2 * p->nclasses + j]);
+      printf("\n");
+    }
+  }
 }

@@ -29,4 +29,4 @@ cdef class ClassificationCriterionDpu(Criterion):
 
 cdef class GiniDpu(ClassificationCriterionDpu):
 
-    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil except -1
+    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu) nogil except -1

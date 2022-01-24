@@ -21,6 +21,7 @@ typedef struct Params {
   uint64_t npointperdpu;
   uint32_t nfeatures;
   uint32_t ntargets;
+  uint32_t nclasses;
   float scale_factor;
   float threshold;
   float *mean;

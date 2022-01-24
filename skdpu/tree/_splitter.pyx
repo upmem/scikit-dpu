@@ -64,6 +64,7 @@ cdef class RandomDpuSplitter(Splitter):
         print("updating parameters")
         p.npoints = self.n_samples
         p.nfeatures = self.n_features
+        p.nclasses = (<GiniDpu>self.criterion).n_classes[0]
 
         print("allocating X")
         self.X = X
@@ -183,15 +184,19 @@ cdef class RandomDpuSplitter(Splitter):
 
         return 0
 
-    cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index) nogil:
+    cdef int draw_threshold(self, SetRecord * record, CommandResults * res, SIZE_t minmax_index, Params * p) nogil:
         """Draws a random threshold between recovered min and max"""
         cdef DTYPE_t min_feature_value
         cdef DTYPE_t max_feature_value
         cdef UINT32_t * random_state = &self.rand_r_state
         cdef SIZE_t * features = record.features
+        cdef SIZE_t i
 
-        min_feature_value = res.min_max[2 * minmax_index]
-        max_feature_value = res.min_max[2 * minmax_index + 1]
+        min_feature_value = INFINITY
+        max_feature_value = -INFINITY
+        for i in range(p.ndpu):
+            min_feature_value = min(min_feature_value, res.min_max[2 * minmax_index])
+            max_feature_value = max(max_feature_value, res.min_max[2 * minmax_index + 1])
 
         printf("min: %f, max: %f\n", min_feature_value, max_feature_value)
 
@@ -215,9 +220,9 @@ cdef class RandomDpuSplitter(Splitter):
 
         return 0
 
-    cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil:
+    cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, Params * p) nogil:
         """Reads the split evaluation results sent by the DPU and updates if current is better than best"""
-        (<GiniDpu>self.criterion).dpu_update(record, res, eval_index)
+        (<GiniDpu>self.criterion).dpu_update(record, res, eval_index, p.ndpu)
         cdef double current_proxy_improvement
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
@@ -228,7 +233,13 @@ cdef class RandomDpuSplitter(Splitter):
             record.best = record.current
             record.weighted_n_left = self.criterion.weighted_n_left
             record.weighted_n_right = self.criterion.weighted_n_right
+            self.criterion.children_impurity(&record.best.impurity_left, &record.best.impurity_right)
 
         record.has_minmax = False
 
         return 0
+
+    cdef int node_split(self, double impurity, SplitRecord* split,
+                        SIZE_t* n_constant_features) nogil except -1:
+        """Finalizes the node split and computes the real impurity improvement"""
+        pass

@@ -410,7 +410,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         printf("impurity_left %f\n", impurity_left[0])
         printf("impurity_right %f\n", impurity_right[0])
 
-    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index) nogil except -1:
+    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu) nogil except -1:
         printf("updating the criterion\n")
         cdef SIZE_t * n_classes = self.n_classes
 
@@ -419,30 +419,38 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         cdef double* sum_total = self.sum_total
         cdef double* weighted_n_left = &self.weighted_n_left
         cdef double* weighted_n_right = &self.weighted_n_right
-        cdef double weighted_n_node_samples = self.weighted_n_node_samples
+        cdef double* weighted_n_node_samples = &self.weighted_n_node_samples
 
-        cdef SIZE_t c
+        weighted_n_node_samples[0] = record.weighted_n_node_samples
+
+        cdef SIZE_t c, i
         cdef UINT32_t cnt
 
         # Assuming here we have self.n_outputs = 1
+        printf("weighted_n_node_samples = %f\n", weighted_n_node_samples[0]) #DEBUG
 
         weighted_n_left[0] = 0
         record.n_left = 0
         # Update left part
         for c in range(n_classes[0]):
-            cnt = res.gini_cnt[eval_index * 2 * n_classes[0] + c]
+            cnt = 0
+            for i in range(ndpu):
+                cnt += res[i].gini_cnt[eval_index * 2 * n_classes[0] + c]
             sum_left[c] = cnt
-            printf("read value: %i ", res.gini_cnt[eval_index * 2 * n_classes[0] + c])
+            printf("read value: %i ", cnt)
             printf("sum_left: %f\n", sum_left[c])
             weighted_n_left[0] += sum_left[c]
             record.n_left += cnt
 
         # Update right part
         for c in range(n_classes[0]):
-            sum_right[c] = res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
-            printf("read value: %i ", res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c])
+            cnt = 0
+            for i in range(ndpu):
+                cnt += res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
+            sum_right[c] = cnt
+            printf("read value: %i ", cnt)
             printf("sum_right: %f\n", sum_right[c])
-        weighted_n_right[0] = weighted_n_node_samples - weighted_n_left[0]
+        weighted_n_right[0] = weighted_n_node_samples[0] - weighted_n_left[0]
         record.n_right = record.n_node_samples - record.n_left
 
         # Update total

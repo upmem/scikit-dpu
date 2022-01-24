@@ -91,10 +91,12 @@ cdef class Set:
         top_record.is_left = is_left
         top_record.is_leaf = False
         top_record.impurity = impurity
+        printf("impurity = %f\n", impurity)
         top_record.n_constant_features = n_constant_features
         top_record.n_node_samples = n_node_samples
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
         top_record.first_seen = True
+        top_record.has_evaluated = False
         top_record.current_proxy_improvement = -INFINITY
 
         # initializing loop variables
@@ -130,13 +132,19 @@ cdef class Set:
     cdef int remove(self, SIZE_t index) nogil:
         """Removes an element from the set"""
         cdef SIZE_t top = self.top
+
+        top -= 1
+        self.top = top
+
         if index < top:
+            printf("removing element %i with depth %i and is_left %i\n", index, self.set_[index].depth, self.set_[index].is_left)
+            printf("replacing with record at %i with depth %i and is_left %i\n", top, self.set_[top].depth, self.set_[top].is_left)
             self.set_[index] = self.set_[top]
+            printf("replaced at %i by record with depth %i and is_left %i\n", index, self.set_[index].depth, self.set_[index].is_left)
         elif index > top:
             with gil:
                 raise ValueError("Trying to remove wrong element from the frontier set.")
 
-        self.top = top - 1
         return 0
 
     cdef int prune_leaves(self) nogil:
