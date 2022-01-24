@@ -222,8 +222,11 @@ cdef class RandomDpuSplitter(Splitter):
 
     cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, Params * p) nogil:
         """Reads the split evaluation results sent by the DPU and updates if current is better than best"""
-        (<GiniDpu>self.criterion).dpu_update(record, res, eval_index, p.ndpu)
         cdef double current_proxy_improvement
+        cdef SIZE_t n_left
+        cdef SIZE_t n_right
+
+        (<GiniDpu>self.criterion).dpu_update(res, eval_index, p.ndpu, record.n_node_samples, &n_left, &n_right)
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
@@ -233,6 +236,8 @@ cdef class RandomDpuSplitter(Splitter):
             record.best = record.current
             record.weighted_n_left = self.criterion.weighted_n_left
             record.weighted_n_right = self.criterion.weighted_n_right
+            record.n_left = n_left
+            record.n_right = n_right
             self.criterion.children_impurity(&record.best.impurity_left, &record.best.impurity_right)
 
         record.has_minmax = False

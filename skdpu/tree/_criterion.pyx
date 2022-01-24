@@ -410,7 +410,9 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         printf("impurity_left %f\n", impurity_left[0])
         printf("impurity_right %f\n", impurity_right[0])
 
-    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu) nogil except -1:
+    cdef int dpu_update(self, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu, SIZE_t n_node_samples,
+                        SIZE_t * n_left, SIZE_t * n_right) nogil except -1:
+        # TODO: sort the mess between weighted_n_left and n_left
         printf("updating the criterion\n")
         cdef SIZE_t * n_classes = self.n_classes
 
@@ -419,18 +421,15 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         cdef double* sum_total = self.sum_total
         cdef double* weighted_n_left = &self.weighted_n_left
         cdef double* weighted_n_right = &self.weighted_n_right
-        cdef double* weighted_n_node_samples = &self.weighted_n_node_samples
-
-        weighted_n_node_samples[0] = record.weighted_n_node_samples
 
         cdef SIZE_t c, i
         cdef UINT32_t cnt
 
         # Assuming here we have self.n_outputs = 1
-        printf("weighted_n_node_samples = %f\n", weighted_n_node_samples[0]) #DEBUG
+        printf("n_node_samples = %i\n", n_node_samples) #DEBUG
 
         weighted_n_left[0] = 0
-        record.n_left = 0
+        n_left[0] = 0
         # Update left part
         for c in range(n_classes[0]):
             cnt = 0
@@ -440,7 +439,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
             printf("read value: %i ", cnt)
             printf("sum_left: %f\n", sum_left[c])
             weighted_n_left[0] += sum_left[c]
-            record.n_left += cnt
+            n_left[0] += cnt
 
         # Update right part
         for c in range(n_classes[0]):
@@ -450,8 +449,8 @@ cdef class GiniDpu(ClassificationCriterionDpu):
             sum_right[c] = cnt
             printf("read value: %i ", cnt)
             printf("sum_right: %f\n", sum_right[c])
-        weighted_n_right[0] = weighted_n_node_samples[0] - weighted_n_left[0]
-        record.n_right = record.n_node_samples - record.n_left
+        weighted_n_right[0] = n_node_samples - weighted_n_left[0]
+        n_right[0] = n_node_samples - n_left[0]
 
         # Update total
         # for c in range(n_classes[0]):

@@ -2,11 +2,11 @@
 #
 # License: MIT
 
-from sklearn.tree._tree cimport DTYPE_t          # Type of X
-from sklearn.tree._tree cimport DOUBLE_t         # Type of y, sample_weight
-from sklearn.tree._tree cimport SIZE_t           # Type for indices and counters
-from sklearn.tree._tree cimport INT32_t          # Signed 32 bit integer
-from sklearn.tree._tree cimport UINT32_t         # Unsigned 32 bit integer
+from sklearn.tree._tree cimport DTYPE_t  # Type of X
+from sklearn.tree._tree cimport DOUBLE_t  # Type of y, sample_weight
+from sklearn.tree._tree cimport SIZE_t  # Type for indices and counters
+from sklearn.tree._tree cimport INT32_t  # Signed 32 bit integer
+from sklearn.tree._tree cimport UINT32_t  # Unsigned 32 bit integer
 
 from sklearn.tree._criterion cimport Criterion
 
@@ -28,5 +28,5 @@ cdef class ClassificationCriterionDpu(Criterion):
     cdef SIZE_t sum_stride
 
 cdef class GiniDpu(ClassificationCriterionDpu):
-
-    cdef int dpu_update(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu) nogil except -1
+    cdef int dpu_update(self, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu, SIZE_t n_node_samples,
+                        SIZE_t * n_left, SIZE_t * n_right) nogil except -1
