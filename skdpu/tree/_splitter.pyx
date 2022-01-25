@@ -180,7 +180,12 @@ cdef class RandomDpuSplitter(Splitter):
         self.criterion.weighted_n_right = record.weighted_n_right
         self.criterion.weighted_n_node_samples = record.weighted_n_node_samples
 
-        split.improvement = self.criterion.impurity_improvement(impurity, impurity_left, impurity_right)
+        printf("weighted_n_node_samples: %f, weighted_n_samples: %f\n", self.criterion.weighted_n_node_samples, self.criterion.weighted_n_samples)
+        if split.feature != -1:
+            split.improvement = self.criterion.impurity_improvement(impurity, impurity_left, impurity_right)
+        else:
+            split.improvement = -INFINITY
+        printf("impurity improvement (inside function): %f\n", split.improvement)
 
         return 0
 
@@ -225,8 +230,12 @@ cdef class RandomDpuSplitter(Splitter):
         cdef double current_proxy_improvement
         cdef SIZE_t n_left
         cdef SIZE_t n_right
+        cdef int rc = 0
+        cdef int i
 
-        (<GiniDpu>self.criterion).dpu_update(res, eval_index, p.ndpu, record.n_node_samples, &n_left, &n_right)
+        rc = (<GiniDpu>self.criterion).dpu_update(res, eval_index, p.ndpu, record.n_node_samples, &n_left, &n_right)
+        if rc == -1:
+            return -1
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
@@ -238,6 +247,16 @@ cdef class RandomDpuSplitter(Splitter):
             record.weighted_n_right = self.criterion.weighted_n_right
             record.n_left = n_left
             record.n_right = n_right
+            printf("left value: ")
+            for i in range(p.nclasses):
+                printf("%f ", self.criterion.sum_left[i])
+            printf("\n")
+            printf("right value: ")
+            for i in range(p.nclasses):
+                printf("%f ", self.criterion.sum_right[i])
+            printf("\n")
+            memcpy(record.sum_left, self.criterion.sum_left, p.nclasses * sizeof(double))
+            memcpy(record.sum_right, self.criterion.sum_right, p.nclasses * sizeof(double))
             self.criterion.children_impurity(&record.best.impurity_left, &record.best.impurity_right)
 
         record.has_minmax = False

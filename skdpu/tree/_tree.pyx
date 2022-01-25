@@ -7,6 +7,7 @@ cimport numpy as np
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc
+from libc.string cimport memcpy
 
 from ._utils cimport Set
 from ._utils cimport SetRecord
@@ -124,6 +125,10 @@ cdef class DpuTreeBuilder(TreeBuilder):
         splitter.init_dpu(X, y, y_float, sample_weight_ptr, p)
 
         print("inited dat DPU")
+        splitter.criterion.weighted_n_samples = splitter.weighted_n_samples
+        splitter.criterion.n_samples = splitter.n_samples
+        print(f"weighted_n_samples: {splitter.weighted_n_samples}")
+        print(f"n_samples: {splitter.n_samples}")
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
         cdef SetRecord * record
@@ -170,7 +175,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
             # add root to frontier
             printf("adding root to frontier with %i samples\n", n_node_samples)
             # TODO: compute root node impurity (idea: make an evaluate with a threshold at infinity)
-            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, 10.0, 0, 0, record, splitter.n_features)
+            # TODO: compute root node value (use it to get impurity)
+            rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, 10.0, 0, 0, record, splitter.n_features, p.nclasses)
             if rc == -1:
                 with gil:
                     raise MemoryError()
@@ -245,6 +251,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         rc = splitter.impurity_improvement(impurity, best, record)
                         if rc == -1:
                             break
+                        printf("best improvement : %f\n", best.improvement)
                         is_leaf = (is_leaf or
                                    best.improvement + EPSILON < min_impurity_decrease)
                         record.is_leaf = is_leaf
@@ -302,6 +309,9 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                                  best.threshold, impurity, n_node_samples,
                                                  weighted_n_node_samples)
 
+                        memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
+                        splitter.node_value(tree.value + node_id * tree.value_stride)
+
                         record.is_leaf = True  # not actually a leaf, just marking for deletion
 
                         # add both children to the frontier
@@ -310,7 +320,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         n_node_samples = record.n_left
                         impurity = record.best.impurity_left
                         rc = frontier.push(n_node_samples, depth + 1, node_id, True, impurity, n_constant_features,
-                                           leaf_index, record, splitter.n_features)
+                                           leaf_index, record, splitter.n_features, p.nclasses)
                         if rc == -1:
                             break
 
@@ -318,7 +328,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         impurity = record.best.impurity_right
                         # right child gets first available leaf index
                         rc = frontier.push(n_node_samples, depth + 1, node_id, False, impurity, n_constant_features,
-                                           n_leaves, record, splitter.n_features)
+                                           n_leaves, record, splitter.n_features, p.nclasses)
                         if rc == -1:
                             break
                         n_leaves += 1
@@ -327,6 +337,11 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
                                                  _TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)
+
+                        # TODO: refactor to make the copy once
+                        memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
+                        printf("sum_total : %f %f %f\n", splitter.criterion.sum_total[0], splitter.criterion.sum_total[1], splitter.criterion.sum_total[2])
+                        splitter.node_value(tree.value + node_id * tree.value_stride)
 
                         node = &tree.nodes[node_id]
                         node.left_child = _TREE_LEAF

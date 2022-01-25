@@ -52,6 +52,9 @@ cdef struct SetRecord:
     SplitRecord best
     SIZE_t features[MAX_CLASSES]
     SIZE_t constant_features[MAX_CLASSES]
+    double sum_total[MAX_CLASSES]
+    double sum_left[MAX_CLASSES]
+    double sum_right[MAX_CLASSES]
 
     # splitter loop variables that we keep track of
     SIZE_t f_i
@@ -75,6 +78,6 @@ cdef class Set:
     cdef bint is_empty(self) nogil
     cdef int push(self, SIZE_t n_node_samples, SIZE_t depth, SIZE_t parent, bint is_left,
                   double impurity, SIZE_t n_constant_features, SIZE_t leaf_index,
-                  SetRecord * parent_record, SIZE_t n_features) nogil except -1
+                  SetRecord * parent_record, SIZE_t n_features, SIZE_t n_classes) nogil except -1
     cdef int remove(self, SIZE_t index) nogil
     cdef int prune_leaves(self) nogil

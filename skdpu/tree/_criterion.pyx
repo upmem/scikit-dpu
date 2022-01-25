@@ -445,7 +445,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         for c in range(n_classes[0]):
             cnt = 0
             for i in range(ndpu):
-                cnt += res.gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
+                cnt += res[i].gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
             sum_right[c] = cnt
             printf("read value: %i ", cnt)
             printf("sum_right: %f\n", sum_right[c])
@@ -455,3 +455,5 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         # Update total
         # for c in range(n_classes[0]):
         #     sum_total[c] = sum_left[c] + sum_right[c]
+
+        return 0

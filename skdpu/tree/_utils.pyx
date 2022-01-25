@@ -64,7 +64,7 @@ cdef class Set:
 
     cdef int push(self, SIZE_t n_node_samples, SIZE_t depth, SIZE_t parent, bint is_left,
                   double impurity, SIZE_t n_constant_features, SIZE_t leaf_index,
-                  SetRecord * parent_record, SIZE_t n_features) nogil except -1:
+                  SetRecord * parent_record, SIZE_t n_features, SIZE_t n_classes) nogil except -1:
         """Add an element to the table.
         
         Return -1 in case of failure to allocate memory (and raise MemoryError)
@@ -97,7 +97,12 @@ cdef class Set:
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
         top_record.first_seen = True
         top_record.has_evaluated = False
+        top_record.has_minmax = False
         top_record.current_proxy_improvement = -INFINITY
+        top_record.best.improvement = -INFINITY
+        top_record.best.impurity_right = INFINITY
+        top_record.best.impurity_left = INFINITY
+        top_record.best.feature = -1
 
         # initializing loop variables
         top_record.n_found_constants = 0
@@ -108,6 +113,11 @@ cdef class Set:
         top_record.f_i = n_features
 
         if not parent == _TREE_UNDEFINED:
+            if is_left:
+                memcpy(top_record.sum_total, parent_record.sum_left, n_classes * sizeof(double))
+            else:
+                memcpy(top_record.sum_total, parent_record.sum_right, n_classes * sizeof(double))
+
             # TODO: optimize this copy, or change the structure to not move records in it
             memcpy(top_record.features, parent_record.features, sizeof(SIZE_t) * n_features)
             memcpy(top_record.constant_features, parent_record.constant_features, sizeof(SIZE_t) * n_features)
