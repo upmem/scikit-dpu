@@ -27,7 +27,7 @@
 
 #include "../trees_common.h"
 
-/*#define DEBUG*/
+#define DEBUG
 
 /*------------------ INPUT ------------------------------*/
 /** @name Host
@@ -1059,6 +1059,8 @@ int main() {
 
   // initialization
   if (me() == 0) {
+    // DEBUG
+    printf("n_points %u, n_features %u, n_classes %u\n", n_points, n_features, n_classes);
     batch_cnt = 0;
     cmd_cnt = 0;
     n_points_8align = ((n_points + 1) >> 1) << 1;
@@ -1113,6 +1115,14 @@ int main() {
   }
   barrier_wait(&barrier);
 #endif
+
+  // DEBUG
+  if (me() == 0) {
+    printf("gini_cnt on dpu: ");
+    for (uint32_t i = 0; i<3; i++)
+      printf("%u ", gini_cnt[i]);
+    printf("\n");
+  }
 
   return 0;
 }

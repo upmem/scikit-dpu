@@ -70,7 +70,7 @@ cdef class RandomDpuSplitter(Splitter):
         self.X = X
 
         print("allocating dpus")
-        p.ndpu = 1
+        p.ndpu = 2
         allocate(p)
         print("loading kernel")
         load_kernel(p, dpu_binary)

@@ -302,6 +302,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                 break
                             eval_index += 1
 
+                            break
+
                     elif not is_leaf:
                         # adding node to the tree
                         node_id = tree._add_node(parent, is_left, is_leaf, best.feature,

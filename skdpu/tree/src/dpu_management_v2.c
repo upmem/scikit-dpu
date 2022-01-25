@@ -255,13 +255,18 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
                               sizeof(uint32_t), DPU_XFER_ASYNC));
   uint32_t nleaves = 1;
   uint32_t leaf_start_index = 0;
-  uint32_t leaf_end_index = p->npoints;
   DPU_ASSERT(dpu_broadcast_to(p->allset, "n_leaves", 0, &nleaves,
                               sizeof(uint32_t), DPU_XFER_ASYNC));
   DPU_ASSERT(dpu_broadcast_to(p->allset, "leaf_start_index", 0,
                               &leaf_start_index, sizeof(uint32_t),
                               DPU_XFER_ASYNC));
-  DPU_ASSERT(dpu_broadcast_to(p->allset, "leaf_end_index", 0, &leaf_end_index,
+  DPU_RANK_FOREACH(p->allset, rank, each_rank) {
+    DPU_FOREACH(rank, dpu, each_dpu) {
+      DPU_ASSERT(dpu_prepare_xfer(
+          dpu, &(cb_args[each_rank].nr_points_per_dpu[each_dpu])));
+    }
+  }
+  DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "leaf_end_index", 0,
                               sizeof(uint32_t), DPU_XFER_ASYNC));
 
   // synchronize all ranks
@@ -354,5 +359,8 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
         printf("%i ", res[each_dpu].gini_cnt[i * 2 * p->nclasses + j]);
       printf("\n");
     }
+  }
+  DPU_FOREACH(p->allset, dpu, each_dpu) {
+    DPU_ASSERT(dpu_log_read(dpu, stdout));
   }
 }
