@@ -992,6 +992,21 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 }
 
 /**
+ * create a commit for an empty leaf
+ **/
+void do_empty_commit(uint16_t index_cmd, uint16_t index_new_leaf) {
+
+  uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
+  assert(index_new_leaf < MAX_NB_LEAF);
+  uint32_t index_tmp = leaf_end_index[leaf_index];
+  leaf_start_index[index_new_leaf] = index_tmp;
+  leaf_end_index[index_new_leaf] = index_tmp;
+  mutex_lock(n_leaves_mutex);
+  n_leaves++;
+  mutex_unlock(n_leaves_mutex);
+}
+
+/**
  * @return the next leaf index to use for a commit command
  **/
 static uint16_t get_new_leaf_index(uint16_t index_cmd) {
@@ -1081,11 +1096,15 @@ int main() {
 
     } else if (cmds_array[index_cmd].type == SPLIT_COMMIT) {
 
-      // if the targeted leaf is empty, this is an error
       uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
-      assert(leaf_start_index[leaf_index] < leaf_end_index[leaf_index]);
+      assert(leaf_start_index[leaf_index] <= leaf_end_index[leaf_index]);
 
-      do_split_commit(index_cmd, index_batch, 0);
+      // if the targeted leaf is empty, create a new empty leaf 
+      // this is to be coherent with other dpus
+      bool empty = leaf_start_index[leaf_index] == leaf_end_index[leaf_index];
+
+      if(!empty)
+        do_split_commit(index_cmd, index_batch, 0);
 
       bool last = false;
       mutex_lock(commit_mutex);
@@ -1093,9 +1112,14 @@ int main() {
         last = true;
       mutex_unlock(commit_mutex);
 
-      if (last)
-        do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
-                        get_new_leaf_index(index_cmd));
+      if (last) {
+        if(!empty)
+          do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
+              get_new_leaf_index(index_cmd));
+        else {
+          do_empty_commit(index_cmd, get_new_leaf_index(index_cmd));
+        }
+      }
 
     } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
 
