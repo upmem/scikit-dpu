@@ -84,7 +84,7 @@ cdef class Set:
             safe_realloc(&self.set_, self.capacity)
 
         top_record = &self.set_[top]
-        printf("now looking at top record at index %d\n", top)
+        printf("now looking at top record at index %d with leaf_index %d\n", top, leaf_index)
         top_record.leaf_index = leaf_index
         top_record.depth = depth
         top_record.parent = parent
@@ -94,6 +94,7 @@ cdef class Set:
         printf("impurity = %f\n", impurity)
         top_record.n_constant_features = n_constant_features
         top_record.n_node_samples = n_node_samples
+        printf("n_node_samples = %d\n", n_node_samples)
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
         top_record.first_seen = True
         top_record.has_evaluated = False

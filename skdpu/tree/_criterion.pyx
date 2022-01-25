@@ -427,6 +427,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
 
         # Assuming here we have self.n_outputs = 1
         printf("n_node_samples = %i\n", n_node_samples) #DEBUG
+        printf("leaf index : %d\n", eval_index)
 
         weighted_n_left[0] = 0
         n_left[0] = 0

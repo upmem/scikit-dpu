@@ -6,7 +6,7 @@ import numpy as np
 cimport numpy as np
 
 from libc.stdio cimport printf
-from libc.stdlib cimport malloc
+from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 
 from ._utils cimport Set
@@ -169,7 +169,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
         printf("handbrake is off\n")
         with nogil:
             # initializing the results array
-            # TODO: free it at some point
             res = <CommandResults *>malloc(p.ndpu * sizeof(CommandResults))
 
             # add root to frontier
@@ -352,8 +351,12 @@ cdef class DpuTreeBuilder(TreeBuilder):
             if rc >= 0:
                 rc = tree._resize_c(tree.node_count)
 
+            free(res)
+
         if rc == -1:
             raise MemoryError()
+
+        free_dpus(p)
 
 cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:

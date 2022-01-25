@@ -200,8 +200,8 @@ cdef class RandomDpuSplitter(Splitter):
         min_feature_value = INFINITY
         max_feature_value = -INFINITY
         for i in range(p.ndpu):
-            min_feature_value = min(min_feature_value, res.min_max[2 * minmax_index])
-            max_feature_value = max(max_feature_value, res.min_max[2 * minmax_index + 1])
+            min_feature_value = min(min_feature_value, res[i].min_max[2 * minmax_index])
+            max_feature_value = max(max_feature_value, res[i].min_max[2 * minmax_index + 1])
 
         printf("min: %f, max: %f\n", min_feature_value, max_feature_value)
 

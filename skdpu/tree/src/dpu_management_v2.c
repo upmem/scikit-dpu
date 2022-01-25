@@ -36,6 +36,7 @@ void allocate(Params *p) {
 void free_dpus(Params *p) {
 
   assert(p);
+  printf("freeing DPUs\n");
   DPU_ASSERT(dpu_free(p->allset));
 }
 
