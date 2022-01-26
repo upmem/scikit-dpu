@@ -175,6 +175,10 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
   } else {
     // commit case
     *index_batch = 0;
+    // specific case where the split feature is feature 0
+    // directly skip it
+    if(cmds_array[cmd_cnt].feature_index == 0)
+      *index_batch = 1;
   }
   return true;
 }
@@ -372,6 +376,20 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
 #endif
     c_gini_cnt[me()][i] += gini_cnt_high[i - n_classes];
   }
+
+#ifdef DEBUG
+  // for each class, the gini count low+high should be less than the number of points
+  // in the leaf
+  uint32_t npoints_leaf = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
+  uint32_t tot = 0;
+  for (int i = 0; i < n_classes; ++i) {
+    tot += c_gini_cnt[me()][i] + c_gini_cnt[me()][i + n_classes];
+  }
+  if(tot > npoints_leaf) {
+    printf("ERROR: gini count inexact: %u > %u\n", tot, npoints_leaf);
+  }
+#endif
+
   // store the updated values
   mram_write(c_gini_cnt[me()], &gini_cnt[start_index],
              2 * n_classes * sizeof(uint32_t));
@@ -974,6 +992,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     // In this case it will be empty
 #ifdef DEBUG
     printf("pivot found %u\n", pivot);
+    uint32_t parent_cnt = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 #endif
     assert(index_new_leaf < MAX_NB_LEAF);
     uint32_t index_tmp = leaf_end_index[leaf_index];
@@ -983,6 +1002,12 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     mutex_lock(n_leaves_mutex);
     n_leaves++;
     mutex_unlock(n_leaves_mutex);
+#ifdef DEBUG
+    printf("tid %u index_cmd %u Created 2 leaves: left index %u cnt %u, right inex %u cnt %u, parent index %u cnt %u\n",
+        me(), index_cmd,
+        leaf_index, leaf_end_index[leaf_index] - leaf_start_index[leaf_index], index_new_leaf, 
+        leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf], leaf_index, parent_cnt); 
+#endif
   }
 
 #ifdef DEBUG
@@ -997,6 +1022,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 void do_empty_commit(uint16_t index_cmd, uint16_t index_new_leaf) {
 
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
+#ifdef DEBUG
+  uint32_t parent_cnt = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
+#endif
   assert(index_new_leaf < MAX_NB_LEAF);
   uint32_t index_tmp = leaf_end_index[leaf_index];
   leaf_start_index[index_new_leaf] = index_tmp;
@@ -1004,6 +1032,11 @@ void do_empty_commit(uint16_t index_cmd, uint16_t index_new_leaf) {
   mutex_lock(n_leaves_mutex);
   n_leaves++;
   mutex_unlock(n_leaves_mutex);
+#ifdef DEBUG
+  printf("Created empty leaves: left index %u cnt %u, right inex %u cnt %u, parent index %u cnt %u\n",
+        leaf_index, leaf_end_index[leaf_index] - leaf_start_index[leaf_index], index_new_leaf, 
+        leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf], leaf_index, parent_cnt); 
+#endif
 }
 
 /**
@@ -1074,14 +1107,17 @@ int main() {
 
   // initialization
   if (me() == 0) {
-    // DEBUG
-    printf("n_points %u, n_features %u, n_classes %u\n", n_points, n_features, n_classes);
     batch_cnt = 0;
     cmd_cnt = 0;
     n_points_8align = ((n_points + 1) >> 1) << 1;
     memset(cmd_tasklet_cnt, 0, nb_cmds);
     start_n_leaves = n_leaves;
     gen_res_indexes();
+    // DEBUG
+#ifdef DEBUG
+    printf("n_points %u, n_features %u, n_classes %u\n", n_points, n_features, n_classes);
+    printf("start_n_leaves: %u\n", start_n_leaves);
+#endif
   }
   barrier_wait(&barrier);
 
@@ -1113,9 +1149,13 @@ int main() {
       mutex_unlock(commit_mutex);
 
       if (last) {
-        if(!empty)
+        if(!empty) {
+#ifdef DEBUG
+          printf("tid %u handles last feature %u\n", me(), cmds_array[index_cmd].feature_index);
+#endif
           do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
               get_new_leaf_index(index_cmd));
+        }
         else {
           do_empty_commit(index_cmd, get_new_leaf_index(index_cmd));
         }
