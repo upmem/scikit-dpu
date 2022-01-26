@@ -70,7 +70,6 @@ cdef class RandomDpuSplitter(Splitter):
         self.X = X
 
         print("allocating dpus")
-        p.ndpu = 2
         allocate(p)
         print("loading kernel")
         load_kernel(p, dpu_binary)
@@ -196,6 +195,8 @@ cdef class RandomDpuSplitter(Splitter):
         cdef UINT32_t * random_state = &self.rand_r_state
         cdef SIZE_t * features = record.features
         cdef SIZE_t i
+
+        printf("Drawing threshold\n")
 
         min_feature_value = INFINITY
         max_feature_value = -INFINITY

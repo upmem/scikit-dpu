@@ -421,6 +421,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         cdef double* sum_total = self.sum_total
         cdef double* weighted_n_left = &self.weighted_n_left
         cdef double* weighted_n_right = &self.weighted_n_right
+        cdef double weighted_n_right_check = 0
 
         cdef SIZE_t c, i
         cdef UINT32_t cnt
@@ -450,8 +451,12 @@ cdef class GiniDpu(ClassificationCriterionDpu):
             sum_right[c] = cnt
             printf("read value: %i ", cnt)
             printf("sum_right: %f\n", sum_right[c])
+            weighted_n_right_check += cnt # DEBUG
         weighted_n_right[0] = n_node_samples - weighted_n_left[0]
         n_right[0] = n_node_samples - n_left[0]
+
+        if fabs(weighted_n_right[0] - weighted_n_right_check) > 0.01: # DEBUG
+            printf("ERROR: mismatch between n_node_sample = %u and n_right + n_left = %f\n", n_node_samples, weighted_n_left[0] + weighted_n_right_check)
 
         # Update total
         # for c in range(n_classes[0]):

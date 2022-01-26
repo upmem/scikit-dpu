@@ -1183,7 +1183,7 @@ int main() {
   // DEBUG
   if (me() == 0) {
     printf("gini_cnt on dpu: ");
-    for (uint32_t i = 0; i<3; i++)
+    for (uint32_t i = 0; i<6; i++)
       printf("%u ", gini_cnt[i]);
     printf("\n");
   }

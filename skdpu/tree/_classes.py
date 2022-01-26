@@ -70,6 +70,7 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
         min_impurity_decrease=0.0,
         class_weight=None,
         ccp_alpha=0.0,
+        ndpu=0,
     ):
         super().__init__(
             criterion=criterion,
@@ -85,6 +86,7 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
             min_impurity_decrease=min_impurity_decrease,
             ccp_alpha=ccp_alpha,
         )
+        self.ndpu = ndpu
 
     def fit(self, X, y, sample_weight=None, check_input=True, X_idx_sorted="deprecated"):
 
@@ -329,7 +331,8 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
             min_samples_leaf,
             min_weight_leaf,
             max_depth,
-            self.min_impurity_decrease
+            self.min_impurity_decrease,
+            self.ndpu
         )
 
         builder.build(self.tree_, X, y, sample_weight)
@@ -338,6 +341,6 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
             self.n_classes_ = self.n_classes_[0]
             self.classes_ = self.classes_[0]
 
-        self._prune_tree()
+        # self._prune_tree()
 
         return self

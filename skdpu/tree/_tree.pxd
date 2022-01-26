@@ -44,3 +44,4 @@ cdef extern from "src/trees.h":
 
 cdef class DpuTreeBuilder(TreeBuilder):
     cdef Params p
+    cdef SIZE_t ndpu

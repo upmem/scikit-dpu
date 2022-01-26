@@ -79,13 +79,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
     """Build a decision tree in a breadth-first fashion in parallel"""
 
     def __cinit__(self, RandomDpuSplitter splitter, SIZE_t min_samples_split, SIZE_t min_samples_leaf, double min_weight_leaf, SIZE_t max_depth,
-                  double min_impurity_decrease):
+                  double min_impurity_decrease, SIZE_t ndpu):
         self.splitter = splitter
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.min_weight_leaf = min_weight_leaf
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
+        self.ndpu = ndpu
         print("initialized the builder")
 
     cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None):
@@ -122,6 +123,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         # Recursive partition (without actual recursion)
         y_float = y.astype(np.float32)
+        with nogil:
+            p.ndpu = self.ndpu
         splitter.init_dpu(X, y, y_float, sample_weight_ptr, p)
 
         print("inited dat DPU")
@@ -165,8 +168,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef SIZE_t * features
         cdef SIZE_t * constant_features
 
-        print("entering nogil")
-        printf("handbrake is off\n")
+        print("\nentering nogil")
         with nogil:
             # initializing the results array
             res = <CommandResults *>malloc(p.ndpu * sizeof(CommandResults))
@@ -180,7 +182,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
                 with gil:
                     raise MemoryError()
 
-            printf("incrementing n_leaves\n") #DEBUG
             n_leaves += 1
             printf("added root to frontier\n") # DEBUG
 
@@ -271,6 +272,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                 minmax_index = 0
                 eval_index = 0
+                printf("frontier length : %d\n", frontier_length)  #DEBUG
                 # parse and process DPU output
                 for i_record in range(frontier_length):
                     record = &frontier.set_[i_record]
@@ -288,6 +290,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     n_node_samples = record.n_node_samples
                     weighted_n_node_samples = record.weighted_n_node_samples
 
+                    printf("record %d, depth %d\n", i_record, depth)
+
                     if not has_evaluated:
                         if not has_minmax:
                             rc = splitter.draw_threshold(record, res, minmax_index, p)
@@ -302,13 +306,12 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                 break
                             eval_index += 1
 
-                            break
-
                     elif not is_leaf:
                         # adding node to the tree
                         node_id = tree._add_node(parent, is_left, is_leaf, best.feature,
                                                  best.threshold, impurity, n_node_samples,
                                                  weighted_n_node_samples)
+                        printf("added node (split) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
 
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
                         splitter.node_value(tree.value + node_id * tree.value_stride)
@@ -335,9 +338,11 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         n_leaves += 1
 
                     else: # node is a leaf
+                        printf("found a leaf\n")
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
                                                  _TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)
+                        printf("added node (leaf) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
 
                         # TODO: refactor to make the copy once
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
