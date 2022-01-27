@@ -1008,8 +1008,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     store_feature_values(epilog_start, feature_index, epilog_end - epilog_start,
                          feature_values[me()]);
 
-    store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
-                         feature_values3[me()]);
+    if(max_n_elems_pivot)
+      store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
+          feature_values3[me()]);
   }
   mutex_unlock(commit_mutex);
 
