@@ -15,6 +15,12 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 
+try:
+    from importlib.resources import files, as_file
+except ImportError:
+    # Try backported to PY<39 `importlib_resources`.
+    from importlib_resources import files, as_file
+
 from sklearn.tree._utils cimport log
 from sklearn.tree._utils cimport rand_int
 from sklearn.tree._utils cimport rand_uniform
@@ -55,7 +61,6 @@ cdef class RandomDpuSplitter(Splitter):
         Returns -1 in case of failure to allocate memory (and raise MemoryError)
         or 0 otherwise.
         """
-        cdef char* dpu_binary = "skdpu/tree/src/dpu_programs/trees_dpu_kernel_v2"
         cdef DTYPE_t ** features = NULL
 
         # Call parent init
@@ -70,10 +75,11 @@ cdef class RandomDpuSplitter(Splitter):
         self.X = X
 
         print("allocating dpus")
-        p.ndpu = 1
         allocate(p)
         print("loading kernel")
-        load_kernel(p, dpu_binary)
+        kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
+        with as_file(kernel_bin) as DPU_BINARY:
+            load_kernel(p, bytes(DPU_BINARY))
         print("building jagged array")
         features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point

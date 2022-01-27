@@ -49,6 +49,7 @@ void free_dpus(Params *p) {
 void load_kernel(Params *p, const char *DPU_BINARY) {
 
   assert(p);
+  printf("loading binary %s\n", DPU_BINARY);
   DPU_ASSERT(dpu_load(p->allset, DPU_BINARY, NULL));
 }
 
