@@ -8,4 +8,5 @@ clf = DecisionTreeClassifierDpu(random_state=0, criterion='gini_dpu', splitter='
 X = iris.data[:140]
 y = iris.target[:140]
 clf.fit(X, y)
+print("predict")
 print(clf.predict(iris.data))

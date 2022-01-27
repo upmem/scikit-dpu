@@ -364,6 +364,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
             raise MemoryError()
 
         free_dpus(p)
+        printf("exit function\n")
 
 cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:
