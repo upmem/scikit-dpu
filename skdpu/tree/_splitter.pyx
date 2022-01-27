@@ -117,6 +117,8 @@ cdef class RandomDpuSplitter(Splitter):
 
         cdef bint drew_nonconstant_feature = False
 
+        printf("    drawing a feature :\n")
+
         # Sample up to max_features without replacement using a
         # Fisher-Yates-based algorithm (using the local variables `f_i` and
         # `f_j` to compute a permutation of the `features` array).
@@ -180,12 +182,11 @@ cdef class RandomDpuSplitter(Splitter):
         self.criterion.weighted_n_right = record.weighted_n_right
         self.criterion.weighted_n_node_samples = record.weighted_n_node_samples
 
-        printf("weighted_n_node_samples: %f, weighted_n_samples: %f\n", self.criterion.weighted_n_node_samples, self.criterion.weighted_n_samples)
+        printf("    weighted_n_node_samples: %f, weighted_n_samples: %f\n", self.criterion.weighted_n_node_samples, self.criterion.weighted_n_samples)
         if split.feature != -1:
             split.improvement = self.criterion.impurity_improvement(impurity, impurity_left, impurity_right)
         else:
             split.improvement = -INFINITY
-        printf("impurity improvement (inside function): %f\n", split.improvement)
 
         return 0
 
@@ -197,7 +198,7 @@ cdef class RandomDpuSplitter(Splitter):
         cdef SIZE_t * features = record.features
         cdef SIZE_t i
 
-        printf("Drawing threshold\n")
+        printf("    Drawing threshold\n")
 
         min_feature_value = INFINITY
         max_feature_value = -INFINITY
@@ -205,7 +206,7 @@ cdef class RandomDpuSplitter(Splitter):
             min_feature_value = min(min_feature_value, res[i].min_max[2 * minmax_index])
             max_feature_value = max(max_feature_value, res[i].min_max[2 * minmax_index + 1])
 
-        printf("min: %f, max: %f\n", min_feature_value, max_feature_value)
+        printf("    min: %f, max: %f\n", min_feature_value, max_feature_value)
 
         if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
             features[record.f_j], features[record.n_total_constants] = (
@@ -241,7 +242,7 @@ cdef class RandomDpuSplitter(Splitter):
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
-        printf("old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
+        printf("    old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
         if current_proxy_improvement > record.current_proxy_improvement:
             record.current_proxy_improvement = current_proxy_improvement
             record.best = record.current
@@ -249,11 +250,11 @@ cdef class RandomDpuSplitter(Splitter):
             record.weighted_n_right = self.criterion.weighted_n_right
             record.n_left = n_left
             record.n_right = n_right
-            printf("left value: ")
+            printf("    left value: ")
             for i in range(p.nclasses):
                 printf("%f ", self.criterion.sum_left[i])
             printf("\n")
-            printf("right value: ")
+            printf("    right value: ")
             for i in range(p.nclasses):
                 printf("%f ", self.criterion.sum_right[i])
             printf("\n")

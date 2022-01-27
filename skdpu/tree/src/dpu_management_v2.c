@@ -354,7 +354,7 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
   for(uint32_t i=0; i < nb_gini_cmds; i++) {
     printf("Gini command %i:\n", i);
     DPU_FOREACH(p->allset, dpu, each_dpu) {
-      printf("DPU %i ", each_dpu);
+      printf("DPU #%i :", each_dpu);
       for(uint32_t j=0; j < 2*p->nclasses; j++)
         printf("%i ", res[each_dpu].gini_cnt[i * 2 * p->nclasses + j]);
       printf("\n");

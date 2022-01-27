@@ -1217,9 +1217,21 @@ int main() {
 
   // DEBUG
   if (me() == 0) {
-    printf("gini_cnt on dpu: ");
-    for (uint32_t i = 0; i<6; i++)
-      printf("%u ", gini_cnt[i]);
+    printf("gini_cnt on dpu:\n");
+    uint32_t dbg_eval_cnt = 0;
+    for (uint32_t j = 0; j < nb_cmds; j++) {
+      if (cmds_array[j].type == SPLIT_EVALUATE) {
+        for (uint32_t i = 0; i<6; i++)
+          printf("%u ", gini_cnt[6 * dbg_eval_cnt + i]);
+        printf("\n");
+        dbg_eval_cnt++;
+      }
+    }
+
+    printf("leaves:\n");
+    for (uint32_t i = 0; i < n_leaves; i++) {
+      printf("[%u, %u] ", leaf_start_index[i], leaf_end_index[i]);
+    }
     printf("\n");
   }
 

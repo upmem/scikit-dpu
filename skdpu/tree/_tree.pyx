@@ -205,7 +205,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     impurity = record.impurity
                     best = &record.best
 
-                    printf("record %d, depth %d\n", i_record, depth)
+                    printf("  record %d, depth %d, leaf index %d\n", i_record, depth, record.leaf_index)
 
                     if first_seen:
                         # check if the node is eligible for splitting
@@ -214,7 +214,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                    n_node_samples < 2 * min_samples_leaf or
                                    weighted_n_node_samples < 2 * min_weight_leaf)
                         is_leaf = is_leaf or impurity <= EPSILON
-                        printf("leaf status: %d\n", is_leaf)  #DEBUG
+                        printf("    leaf status: %d\n", is_leaf)  #DEBUG
                         if is_leaf:
                             record.has_evaluated = True
                             has_evaluated = True
@@ -225,7 +225,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     # evaluating node
                     if not has_evaluated:
                         if not has_minmax:
-                            printf("drawing a feature\n")  #DEBUG
                             rc = splitter.draw_feature(record)
                             if rc == -1:
                                 break
@@ -233,11 +232,9 @@ cdef class DpuTreeBuilder(TreeBuilder):
                             # draw_feature might have declared that we finished evaluating the node
                             has_evaluated = record.has_evaluated
                             if not has_evaluated:
-                                printf("adding minmax instruction\n")  #DEBUG
                                 rc = add_minmax_instruction(&command, record, &cmd_arr)
                                 if rc == -1:
                                     break
-                                printf("successfully added minmax instruction\n")  #DEBUG
 
                         else:
                             rc = add_evaluate_instruction(&command, record, &cmd_arr)
@@ -246,12 +243,12 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                     # finalizing node
                     if has_evaluated and not is_leaf:
-                        printf("we've evaluated\n")  #DEBUG
+                        printf("    we've evaluated\n")  #DEBUG
                         # checking if node should be split after computing its improvement
                         rc = splitter.impurity_improvement(impurity, best, record)
                         if rc == -1:
                             break
-                        printf("best improvement : %f\n", best.improvement)
+                        printf("    best improvement : %f\n", best.improvement)
                         is_leaf = (is_leaf or
                                    best.improvement + EPSILON < min_impurity_decrease)
                         record.is_leaf = is_leaf
@@ -290,7 +287,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     n_node_samples = record.n_node_samples
                     weighted_n_node_samples = record.weighted_n_node_samples
 
-                    printf("record %d, depth %d\n", i_record, depth)
+                    printf("  record %d, depth %d, leaf_index %d\n", i_record, depth, leaf_index)
 
                     if not has_evaluated:
                         if not has_minmax:
@@ -300,7 +297,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                             minmax_index += 1
 
                         else:
-                            printf("updating evaluation\n")
+                            printf("    updating evaluation\n")
                             rc = splitter.update_evaluation(record, res, eval_index, p)
                             if rc == -1:
                                 break
@@ -311,7 +308,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, is_leaf, best.feature,
                                                  best.threshold, impurity, n_node_samples,
                                                  weighted_n_node_samples)
-                        printf("added node (split) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
+                        printf("    added node (split) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
 
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
                         splitter.node_value(tree.value + node_id * tree.value_stride)
@@ -338,15 +335,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         n_leaves += 1
 
                     else: # node is a leaf
-                        printf("found a leaf\n")
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
                                                  _TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)
-                        printf("added node (leaf) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
+                        printf("    added node (leaf) %ld with parent %ld and %lu samples\n", node_id, parent, n_node_samples)
 
                         # TODO: refactor to make the copy once
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
-                        printf("sum_total : %f %f %f\n", splitter.criterion.sum_total[0], splitter.criterion.sum_total[1], splitter.criterion.sum_total[2])
+                        printf("    sum_total : %f %f %f\n", splitter.criterion.sum_total[0], splitter.criterion.sum_total[1], splitter.criterion.sum_total[2])
                         splitter.node_value(tree.value + node_id * tree.value_stride)
 
                         node = &tree.nodes[node_id]
@@ -364,7 +360,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
             raise MemoryError()
 
         free_dpus(p)
-        printf("exit function\n")
 
 cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:
@@ -373,7 +368,7 @@ cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
     command.feature_index = record.current.feature
     command.leaf_index = record.leaf_index
 
-    printf("adding minmax on feature %d\n", command.feature_index) #DEBUG
+    printf("    adding minmax on feature %d\n", command.feature_index) #DEBUG
 
     addCommand(cmd_arr, command[0])
 
@@ -387,7 +382,7 @@ cdef inline int add_evaluate_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.current.threshold
 
-    printf("adding evaluate on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
+    printf("    adding evaluate on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
 
     addCommand(cmd_arr, command[0])
 
@@ -399,6 +394,6 @@ cdef inline int add_commit_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.best.threshold
 
-    printf("adding split on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
+    printf("    adding split on feature %d with threshold %f\n", command.feature_index, command.feature_threshold) #DEBUG
 
     addCommand(cmd_arr, command[0])
