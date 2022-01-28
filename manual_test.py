@@ -11,4 +11,4 @@ y = iris.target[:140]
 clf.fit(X, y)
 export_graphviz(clf, out_file="tree.dot")
 print("predict")
-print(clf.predict(iris.data))
+print(clf.predict(X))
