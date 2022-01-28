@@ -206,6 +206,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     weighted_n_node_samples = record.weighted_n_node_samples
                     impurity = record.impurity
                     best = &record.best
+                    is_leaf = record.is_leaf
 
                     printf("  record %ld, depth %ld, leaf index %ld\n", i_record, depth, record.leaf_index)
 
