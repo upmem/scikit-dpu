@@ -424,6 +424,8 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
       leaf_end_index[cmds_array[index_cmd].leaf_index])
     size_batch = leaf_end_index[cmds_array[index_cmd].leaf_index] - index_batch;
 
+  if(!size_batch) return;
+
   feature_t *features_val =
       load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
                           size_batch, feature_values[me()]);
@@ -472,11 +474,13 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
       leaf_end_index[cmds_array[index_cmd].leaf_index])
     size_batch = leaf_end_index[cmds_array[index_cmd].leaf_index] - index_batch;
 
+  if(!size_batch) return;
+
   feature_t *features_val =
       load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
                           size_batch, feature_values[me()]);
 
-  float min = FLT_MAX, max = 0;
+  float min = FLT_MAX, max = -FLT_MAX;
   for (int i = 0; i < size_batch; ++i) {
 
     if (features_val[i] < min) {
