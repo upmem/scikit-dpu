@@ -70,7 +70,7 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
                                             uint32_t rank_id, void *args) {
 
   printf("  callback | doing rank points vector callback on rank %d\n", rank_id); //DEBUG
-  struct callback_args *cb_args = ((struct callback_args **)args)[rank_id];
+  struct callback_args *cb_args = &(((struct callback_args *)args)[rank_id]);
   uint32_t nr_dpus_rank;
   DPU_ASSERT(dpu_get_nr_dpus(rank, &nr_dpus_rank));
 
@@ -197,7 +197,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
-                            &cb_args, DPU_CALLBACK_ASYNC));
+                            cb_args, DPU_CALLBACK_ASYNC));
 
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
       DPU_FOREACH(rank, dpu, each_dpu) {
@@ -222,7 +222,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
-                            &cb_args, DPU_CALLBACK_ASYNC));
+                            cb_args, DPU_CALLBACK_ASYNC));
 
     // TODO the DPU_XFER_NO_RESET flag does not seem to work with async
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
