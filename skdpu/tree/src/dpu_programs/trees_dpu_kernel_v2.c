@@ -1096,7 +1096,7 @@ static void gen_res_indexes() {
     if (cmds_array[i].type == SPLIT_EVALUATE) {
       res_indexes[cmds_array[i].leaf_index] = index_gini++;
     } else if (cmds_array[i].type == SPLIT_MINMAX) {
-      mram_write(min_max_init, &min_max_feature[index_minmax],
+      mram_write(min_max_init, &min_max_feature[index_minmax * 2],
           2 * sizeof(feature_t));
       res_indexes[cmds_array[i].leaf_index] = index_minmax++;
     }
