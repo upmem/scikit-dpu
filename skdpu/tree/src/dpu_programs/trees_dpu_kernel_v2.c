@@ -611,6 +611,10 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
 
   // handle the case where *index > end_index
   if (*index >= end_index) {
+    // in this case we treat the leaf at once
+    // No prolog/epilog but the partitioning will be protected
+    // by mutex
+    *index = start_index;
     *size = end_index - start_index;
     return;
   }
