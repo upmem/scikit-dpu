@@ -621,8 +621,10 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   uint32_t nb_buffers = (end_index - *index) / SIZE_BATCH;
   if (nb_buffers)
     *size = nb_buffers * SIZE_BATCH;
-  else
-    *size = end_index - start_index;
+  else {
+    // case where the size is less than one buffer
+    *size = end_index - *index;
+  }
 }
 
 /**
@@ -741,6 +743,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                              cmds_array[index_cmd].feature_threshold) +
             start_index_low;
 
+    if(size)
     store_feature_values(start_index_low, feature_index, size,
                          feature_values[me()]);
 
