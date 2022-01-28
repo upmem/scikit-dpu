@@ -147,7 +147,7 @@ MUTEX_INIT(batch_mutex);
 /**
  * @brief initialization array for the min_max_feature array in MRAM
  **/
-__dma_aligned feature_t min_max_init[2] = {FLT_MAX, 0};
+__dma_aligned feature_t min_max_init[2] = {FLT_MAX, -FLT_MAX};
 
 /**
  * @brief split commit synchronization
@@ -173,19 +173,19 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
     uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
     *index_batch = leaf_start_index[leaf_index];
     // this is a first batch so need to initialize the gini count
-    if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
-      // first batch of this SPLIT_EVALUATE command
-      // Need to initialize the gini_cnt for this leaf
-      uint32_t start_index =
-          res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
-      memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
-    } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
-      // initialize min_max_feature for this leaf
-      // TODO here assume that feature_t is a multiple of 4
-      uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
-      mram_write(min_max_init, &min_max_feature[start_index],
-                 2 * sizeof(feature_t));
-    }
+    //if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
+    //  // first batch of this SPLIT_EVALUATE command
+    //  // Need to initialize the gini_cnt for this leaf
+    //  uint32_t start_index =
+    //      res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
+    //  memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
+    //} else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
+    //  // initialize min_max_feature for this leaf
+    //  // TODO here assume that feature_t is a multiple of 4
+    //  uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
+    //  mram_write(min_max_init, &min_max_feature[start_index],
+    //             2 * sizeof(feature_t));
+    //}
   } else {
     // commit case
     *index_batch = 0;
@@ -255,21 +255,21 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
     // no next batch, go to next command
     res = get_next_batch_commit(index_cmd, index_batch, &first_batch);
   }
-  if (res && first_batch) {
-    if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
-      // first batch of this SPLIT_EVALUATE command
-      // Need to initialize the gini_cnt for this leaf
-      uint32_t start_index =
-          res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
-      memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
-    } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
-      // initialize min_max_feature for this leaf
-      // TODO here assume that feature_t is a multiple of 4
-      uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
-      mram_write(min_max_init, &min_max_feature[start_index],
-                 2 * sizeof(feature_t));
-    }
-  }
+  //if (res && first_batch) {
+  //  if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
+  //    // first batch of this SPLIT_EVALUATE command
+  //    // Need to initialize the gini_cnt for this leaf
+  //    uint32_t start_index =
+  //        res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
+  //    memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
+  //  } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
+  //    // initialize min_max_feature for this leaf
+  //    // TODO here assume that feature_t is a multiple of 4
+  //    uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
+  //    mram_write(min_max_init, &min_max_feature[start_index],
+  //               2 * sizeof(feature_t));
+  //  }
+  //}
   mutex_unlock(batch_mutex);
   return res;
 }
@@ -1096,9 +1096,12 @@ static void gen_res_indexes() {
     if (cmds_array[i].type == SPLIT_EVALUATE) {
       res_indexes[cmds_array[i].leaf_index] = index_gini++;
     } else if (cmds_array[i].type == SPLIT_MINMAX) {
+      mram_write(min_max_init, &min_max_feature[index_minmax],
+          2 * sizeof(feature_t));
       res_indexes[cmds_array[i].leaf_index] = index_minmax++;
     }
   }
+  memset(&gini_cnt[0], 0, 2 * n_classes * sizeof(uint32_t) * index_gini);
 }
 
 BARRIER_INIT(barrier, NR_TASKLETS);
