@@ -27,8 +27,6 @@
 
 #include "../trees_common.h"
 
-#define DEBUG
-
 /*------------------ INPUT ------------------------------*/
 /** @name Host
  * Variables for host application communication
@@ -1215,7 +1213,9 @@ int main() {
 
     } else {
       // TODO error handling
+#ifdef DEBUG
       printf("index of command %u command type %u\n", index_cmd, cmds_array[index_cmd].type);
+#endif
       assert(0 && "Unknown command");
       return 0;
     }
@@ -1231,6 +1231,7 @@ int main() {
 #endif
 
   // DEBUG
+#ifdef DEBUG
   if (me() == 0) {
     printf("gini_cnt on dpu:\n");
     uint32_t dbg_eval_cnt = 0;
@@ -1249,6 +1250,7 @@ int main() {
     }
     printf("\n");
   }
+#endif
 
   return 0;
 }
