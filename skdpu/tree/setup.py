@@ -15,8 +15,9 @@ def configuration(parent_package="", top_path=None):
     if os.name == "posix":
         libraries.append("m")
 
-    extra_compile_args = ["-g"]
-    # extra_compile_args = ["-O3"]
+    # choose one:
+    # extra_compile_args = ["-g"]  # debug configuration
+    extra_compile_args = ["-O3"]  # release configuration
 
     # compiling DPU binaries and adding them as a resource
     # print("Compiling DPU binary")
