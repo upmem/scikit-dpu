@@ -10,6 +10,13 @@
 
 #include <stdint.h>
 
+/** @name Debug defines
+ */
+/**@{*/
+#define CYTHON_DEBUG 0 /**< debug switch for the Cython code */
+//#define DEBUG /**< debug switch for the C code (host and DPU) */
+/**@}*/
+
 /** @name Constraints
  * @brief Data size constraints
  */
