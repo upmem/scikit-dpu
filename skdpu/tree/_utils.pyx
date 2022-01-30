@@ -10,6 +10,9 @@ from libc.string cimport memcpy
 from libc.stdlib cimport realloc
 from libc.stdio cimport printf
 
+cdef extern from "src/trees_common.h":
+    enum: CYTHON_DEBUG
+
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
 cdef double INFINITY = np.inf
@@ -70,7 +73,8 @@ cdef class Set:
         Return -1 in case of failure to allocate memory (and raise MemoryError)
         or 0 otherwise.
         """
-        printf("    pushing an element\n") # DEBUG
+        IF CYTHON_DEBUG == 1:
+            printf("    pushing an element\n") # DEBUG
         cdef SIZE_t top = self.top
         cdef SetRecord * top_record = NULL
 
@@ -78,23 +82,27 @@ cdef class Set:
 
         # Resize if capacity not sufficient
         if top >= self.capacity:
-            printf("    resizing the frontier") # DEBUG
+            IF CYTHON_DEBUG == 1:
+                printf("    resizing the frontier") # DEBUG
             self.capacity *= 2
             # Since safe_realloc can raise MemoryError, use `except -1`
             safe_realloc(&self.set_, self.capacity)
 
         top_record = &self.set_[top]
-        printf("    now looking at top record at index %ld with leaf_index %ld\n", top, leaf_index)
+        IF CYTHON_DEBUG == 1:
+            printf("    now looking at top record at index %ld with leaf_index %ld\n", top, leaf_index)
         top_record.leaf_index = leaf_index
         top_record.depth = depth
         top_record.parent = parent
         top_record.is_left = is_left
         top_record.is_leaf = False
         top_record.impurity = impurity
-        printf("    impurity = %f\n", impurity)
+        IF CYTHON_DEBUG == 1:
+            printf("    impurity = %f\n", impurity)
         top_record.n_constant_features = n_constant_features
         top_record.n_node_samples = n_node_samples
-        printf("    n_node_samples = %ld\n", n_node_samples)
+        IF CYTHON_DEBUG == 1:
+            printf("    n_node_samples = %ld\n", n_node_samples)
         top_record.weighted_n_node_samples = n_node_samples  # no support for non-unity weights for DPU trees
         top_record.first_seen = True
         top_record.has_evaluated = False
@@ -137,7 +145,8 @@ cdef class Set:
 
         # Increment set pointer
         self.top = top + 1
-        printf("    done pushing\n") # DEBUG
+        IF CYTHON_DEBUG == 1:
+            printf("    done pushing\n") # DEBUG
         return 0
 
     cdef int remove(self, SIZE_t index) nogil:
@@ -148,8 +157,9 @@ cdef class Set:
         self.top = top
 
         if index < top:
-            printf("    removing element %lu with depth %lu and leaf index %lu\n", index, self.set_[index].depth, self.set_[index].leaf_index)
-            printf("    replacing with record at %lu with depth %lu and leaf index %lu\n", top, self.set_[top].depth, self.set_[top].leaf_index)
+            IF CYTHON_DEBUG == 1:
+                printf("    removing element %lu with depth %lu and leaf index %lu\n", index, self.set_[index].depth, self.set_[index].leaf_index)
+                printf("    replacing with record at %lu with depth %lu and leaf index %lu\n", top, self.set_[top].depth, self.set_[top].leaf_index)
             self.set_[index] = self.set_[top]
         elif index > top:
             with gil:

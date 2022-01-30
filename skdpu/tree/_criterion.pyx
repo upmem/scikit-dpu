@@ -20,6 +20,9 @@ from ._utils cimport safe_realloc
 from sklearn.tree._utils cimport sizet_ptr_to_ndarray
 from sklearn.tree._utils cimport WeightedMedianCalculator
 
+cdef extern from "src/trees_common.h":
+    enum: CYTHON_DEBUG
+
 cdef class ClassificationCriterionDpu(Criterion):
     """Abstract criterion for classification."""
 
@@ -373,7 +376,8 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         impurity_right : double pointer
             The memory address to save the impurity of the right node to
         """
-        printf("    evaluating children impurity\n") # DEBUG
+        IF CYTHON_DEBUG == 1:
+            printf("    evaluating children impurity\n") # DEBUG
         cdef SIZE_t* n_classes = self.n_classes
         cdef double* sum_left = self.sum_left
         cdef double* sum_right = self.sum_right
@@ -407,13 +411,15 @@ cdef class GiniDpu(ClassificationCriterionDpu):
 
         impurity_left[0] = gini_left / self.n_outputs
         impurity_right[0] = gini_right / self.n_outputs
-        printf("    impurity_left %f\n", impurity_left[0])
-        printf("    impurity_right %f\n", impurity_right[0])
+        IF CYTHON_DEBUG == 1:
+            printf("    impurity_left %f\n", impurity_left[0])
+            printf("    impurity_right %f\n", impurity_right[0])
 
     cdef int dpu_update(self, CommandResults * res, SIZE_t eval_index, SIZE_t ndpu, SIZE_t n_node_samples,
                         SIZE_t * n_left, SIZE_t * n_right) nogil except -1:
         # TODO: sort the mess between weighted_n_left and n_left
-        printf("    updating the criterion\n")
+        IF CYTHON_DEBUG == 1:
+            printf("    updating the criterion\n")
         cdef SIZE_t * n_classes = self.n_classes
 
         cdef double* sum_left = self.sum_left
@@ -421,14 +427,17 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         cdef double* sum_total = self.sum_total
         cdef double* weighted_n_left = &self.weighted_n_left
         cdef double* weighted_n_right = &self.weighted_n_right
-        cdef double weighted_n_right_check = 0
+        IF CYTHON_DEBUG == 1:
+            cdef double weighted_n_right_check = 0
 
         cdef SIZE_t c, i
         cdef UINT32_t cnt
 
         # Assuming here we have self.n_outputs = 1
-        printf("    n_node_samples = %lu\n", n_node_samples) #DEBUG
-        printf("    leaf index : %ld\n", eval_index)
+        IF CYTHON_DEBUG == 1:
+            printf("    n_node_samples = %lu\n", n_node_samples) #DEBUG
+        IF CYTHON_DEBUG == 1:
+            printf("    leaf index : %ld\n", eval_index)
 
         weighted_n_left[0] = 0
         n_left[0] = 0
@@ -438,8 +447,9 @@ cdef class GiniDpu(ClassificationCriterionDpu):
             for i in range(ndpu):
                 cnt += res[i].gini_cnt[eval_index * 2 * n_classes[0] + c]
             sum_left[c] = cnt
-            printf("    read value: %i ", cnt)
-            printf("    sum_left: %f\n", sum_left[c])
+            IF CYTHON_DEBUG == 1:
+                printf("    read value: %i ", cnt)
+                printf("    sum_left: %f\n", sum_left[c])
             weighted_n_left[0] += sum_left[c]
             n_left[0] += cnt
 
@@ -449,14 +459,16 @@ cdef class GiniDpu(ClassificationCriterionDpu):
             for i in range(ndpu):
                 cnt += res[i].gini_cnt[(eval_index * 2 + 1) * n_classes[0] + c]
             sum_right[c] = cnt
-            printf("    read value: %i ", cnt)
-            printf("    sum_right: %f\n", sum_right[c])
-            weighted_n_right_check += cnt # DEBUG
+            IF CYTHON_DEBUG == 1:
+                printf("    read value: %i ", cnt)
+                printf("    sum_right: %f\n", sum_right[c])
+                weighted_n_right_check += cnt # DEBUG
         weighted_n_right[0] = n_node_samples - weighted_n_left[0]
         n_right[0] = n_node_samples - n_left[0]
 
-        if fabs(weighted_n_right[0] - weighted_n_right_check) > 0.01: # DEBUG
-            printf("    ERROR: mismatch between n_node_sample = %lu and n_right + n_left = %f\n", n_node_samples, weighted_n_left[0] + weighted_n_right_check)
+        IF CYTHON_DEBUG == 1:
+            if fabs(weighted_n_right[0] - weighted_n_right_check) > 0.01: # DEBUG
+                printf("    ERROR: mismatch between n_node_sample = %lu and n_right + n_left = %f\n", n_node_samples, weighted_n_left[0] + weighted_n_right_check)
 
         # Update total
         # for c in range(n_classes[0]):

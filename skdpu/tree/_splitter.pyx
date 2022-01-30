@@ -34,6 +34,9 @@ cdef extern from "src/trees.h" nogil:
     DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
     void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
 
+cdef extern from "src/trees_common.h":
+    enum: CYTHON_DEBUG
+
 cdef double INFINITY = np.inf
 
 # Mitigate precision differences between 32 bit and 64 bit
@@ -64,29 +67,37 @@ cdef class RandomDpuSplitter(Splitter):
         cdef DTYPE_t ** features = NULL
 
         # Call parent init
-        print("initializeing base splitter")
+        IF CYTHON_DEBUG == 1:
+            print("initializing base splitter")
         Splitter.init(self, X, y, sample_weight)
-        print("updating parameters")
+        IF CYTHON_DEBUG == 1:
+            print("updating parameters")
         p.npoints = self.n_samples
         p.nfeatures = self.n_features
         p.nclasses = (<GiniDpu>self.criterion).n_classes[0]
 
-        print("allocating X")
+        IF CYTHON_DEBUG == 1:
+            print("allocating X")
         self.X = X
 
-        print("allocating dpus")
+        IF CYTHON_DEBUG == 1:
+            print("allocating dpus")
         allocate(p)
-        print("loading kernel")
+        IF CYTHON_DEBUG == 1:
+            print("loading kernel")
         kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
         with as_file(kernel_bin) as DPU_BINARY:
             load_kernel(p, bytes(DPU_BINARY))
-        print("building jagged array")
+        IF CYTHON_DEBUG == 1:
+            print("building jagged array")
         features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point
-        print("populating dpu")
+        IF CYTHON_DEBUG == 1:
+            print("populating dpu")
         with nogil:
             populateDpu(p, features, &y_float[0,0])
-        print("finished init_dpu")
+        IF CYTHON_DEBUG == 1:
+            print("finished init_dpu")
 
         return 0
 
@@ -123,7 +134,8 @@ cdef class RandomDpuSplitter(Splitter):
 
         cdef bint drew_nonconstant_feature = False
 
-        printf("    drawing a feature :\n")
+        IF CYTHON_DEBUG == 1:
+            printf("    drawing a feature :\n")
 
         # Sample up to max_features without replacement using a
         # Fisher-Yates-based algorithm (using the local variables `f_i` and
@@ -188,7 +200,10 @@ cdef class RandomDpuSplitter(Splitter):
         self.criterion.weighted_n_right = record.weighted_n_right
         self.criterion.weighted_n_node_samples = record.weighted_n_node_samples
 
-        printf("    weighted_n_node_samples: %f, weighted_n_samples: %f\n", self.criterion.weighted_n_node_samples, self.criterion.weighted_n_samples)
+        IF CYTHON_DEBUG == 1:
+            printf("    weighted_n_node_samples: %f, weighted_n_samples: %f\n",
+                   self.criterion.weighted_n_node_samples,
+                   self.criterion.weighted_n_samples)
         if split.feature != -1:
             split.improvement = self.criterion.impurity_improvement(impurity, impurity_left, impurity_right)
         else:
@@ -204,7 +219,8 @@ cdef class RandomDpuSplitter(Splitter):
         cdef SIZE_t * features = record.features
         cdef SIZE_t i
 
-        printf("    Drawing threshold\n")
+        IF CYTHON_DEBUG == 1:
+            printf("    Drawing threshold\n")
 
         min_feature_value = INFINITY
         max_feature_value = -INFINITY
@@ -212,7 +228,8 @@ cdef class RandomDpuSplitter(Splitter):
             min_feature_value = min(min_feature_value, res[i].min_max[2 * minmax_index])
             max_feature_value = max(max_feature_value, res[i].min_max[2 * minmax_index + 1])
 
-        printf("    min: %f, max: %f\n", min_feature_value, max_feature_value)
+        IF CYTHON_DEBUG == 1:
+            printf("    min: %f, max: %f\n", min_feature_value, max_feature_value)
 
         if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
             features[record.f_j], features[record.n_total_constants] = (
@@ -248,7 +265,8 @@ cdef class RandomDpuSplitter(Splitter):
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
-        printf("    old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
+        IF CYTHON_DEBUG == 1:
+            printf("    old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
         if current_proxy_improvement > record.current_proxy_improvement:
             record.current_proxy_improvement = current_proxy_improvement
             record.best = record.current
@@ -256,14 +274,15 @@ cdef class RandomDpuSplitter(Splitter):
             record.weighted_n_right = self.criterion.weighted_n_right
             record.n_left = n_left
             record.n_right = n_right
-            printf("    left value: ")
-            for i in range(p.nclasses):
-                printf("%f ", self.criterion.sum_left[i])
-            printf("\n")
-            printf("    right value: ")
-            for i in range(p.nclasses):
-                printf("%f ", self.criterion.sum_right[i])
-            printf("\n")
+            IF CYTHON_DEBUG == 1:
+                printf("    left value: ")
+                for i in range(p.nclasses):
+                    printf("%f ", self.criterion.sum_left[i])
+                printf("\n")
+                printf("    right value: ")
+                for i in range(p.nclasses):
+                    printf("%f ", self.criterion.sum_right[i])
+                printf("\n")
             memcpy(record.sum_left, self.criterion.sum_left, p.nclasses * sizeof(double))
             memcpy(record.sum_right, self.criterion.sum_right, p.nclasses * sizeof(double))
             self.criterion.children_impurity(&record.best.impurity_left, &record.best.impurity_right)

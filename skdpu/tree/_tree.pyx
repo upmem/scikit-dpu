@@ -20,6 +20,7 @@ cdef extern from "src/trees_common.h":
     int SPLIT_MINMAX
     enum: MAX_NB_LEAF
     enum: MAX_CLASSES
+    enum: CYTHON_DEBUG
     struct Command:
         UINT8_t type
         UINT8_t feature_index
@@ -88,12 +89,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
         self.ndpu = ndpu
-        print("initialized the builder")
+        IF CYTHON_DEBUG == 1:
+            print("initialized the builder")
 
     cpdef build(self, Tree tree, object X, np.ndarray y, np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X,y)"""
 
-        print("starting the build")
+        IF CYTHON_DEBUG == 1:
+            print("starting the build")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -120,7 +123,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         cdef Params * p = &self.p
 
-        print("initing dem DPU")
+        IF CYTHON_DEBUG == 1:
+            print("initializing the DPUs")
 
         # Recursive partition (without actual recursion)
         y_float = y.astype(np.float32)
@@ -128,11 +132,13 @@ cdef class DpuTreeBuilder(TreeBuilder):
             p.ndpu = self.ndpu
         splitter.init_dpu(X, y, y_float, sample_weight_ptr, p)
 
-        print("inited dat DPU")
+        IF CYTHON_DEBUG == 1:
+            print("initialized the DPUs")
         splitter.criterion.weighted_n_samples = splitter.weighted_n_samples
         splitter.criterion.n_samples = splitter.n_samples
-        print(f"weighted_n_samples: {splitter.weighted_n_samples}")
-        print(f"n_samples: {splitter.n_samples}")
+        IF CYTHON_DEBUG == 1:
+            print(f"weighted_n_samples: {splitter.weighted_n_samples}")
+            print(f"n_samples: {splitter.n_samples}")
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
         cdef SetRecord * record
@@ -169,13 +175,15 @@ cdef class DpuTreeBuilder(TreeBuilder):
         cdef SIZE_t * features
         cdef SIZE_t * constant_features
 
-        print("\nentering nogil")
+        IF CYTHON_DEBUG == 1:
+            print("\nentering nogil")
         with nogil:
             # initializing the results array
             res = <CommandResults *> malloc(p.ndpu * sizeof(CommandResults))
 
             # add root to frontier
-            printf("adding root to frontier with %lu samples\n", n_node_samples)
+            IF CYTHON_DEBUG == 1:
+                printf("adding root to frontier with %lu samples\n", n_node_samples)
             # TODO: compute root node impurity (idea: make an evaluate with a threshold at infinity)
             # TODO: compute root node value (use it to get impurity)
             rc = frontier.push(n_node_samples, 0, _TREE_UNDEFINED, False, 10.0, 0, 0, record, splitter.n_features,
@@ -185,16 +193,19 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     raise MemoryError()
 
             n_leaves += 1
-            printf("added root to frontier\n")  # DEBUG
+            IF CYTHON_DEBUG == 1:
+                printf("added root to frontier\n")  # DEBUG
 
             while not frontier.is_empty():
-                printf("\n\ndoing a new command layer\n")  #DEBUG
+                IF CYTHON_DEBUG == 1:
+                    printf("\n\ndoing a new command layer\n")  #DEBUG
                 # initializing the command array
                 cmd_arr.nb_cmds = 0
 
                 # fill instruction list
                 frontier_length = frontier.top
-                printf("frontier length : %ld\n", frontier_length)  #DEBUG
+                IF CYTHON_DEBUG == 1:
+                    printf("frontier length : %ld\n", frontier_length)  #DEBUG
                 for i_record in range(frontier_length):
                     record = &frontier.set_[i_record]
 
@@ -208,7 +219,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     best = &record.best
                     is_leaf = record.is_leaf
 
-                    printf("  record %ld, depth %ld, leaf index %ld\n", i_record, depth, record.leaf_index)
+                    IF CYTHON_DEBUG == 1:
+                        printf("  record %ld, depth %ld, leaf index %ld\n", i_record, depth, record.leaf_index)
 
                     if first_seen:
                         # check if the node is eligible for splitting
@@ -217,7 +229,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                                    n_node_samples < 2 * min_samples_leaf or
                                    weighted_n_node_samples < 2 * min_weight_leaf)
                         is_leaf = is_leaf or impurity <= EPSILON
-                        printf("    leaf status: %d\n", is_leaf)  #DEBUG
+                        IF CYTHON_DEBUG == 1:
+                            printf("    leaf status: %d\n", is_leaf)  #DEBUG
                         if is_leaf:
                             record.has_evaluated = True
                             has_evaluated = True
@@ -246,12 +259,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                     # finalizing node
                     if has_evaluated and not is_leaf:
-                        printf("    we've evaluated\n")  #DEBUG
+                        IF CYTHON_DEBUG == 1:
+                            printf("    we've evaluated\n")  #DEBUG
                         # checking if node should be split after computing its improvement
                         rc = splitter.impurity_improvement(impurity, best, record)
                         if rc == -1:
                             break
-                        printf("    best improvement : %f\n", best.improvement)  # DEBUG
+                        IF CYTHON_DEBUG == 1:
+                            printf("    best improvement : %f\n", best.improvement)  # DEBUG
                         is_leaf = (is_leaf or
                                    best.improvement + EPSILON < min_impurity_decrease)
                         record.is_leaf = is_leaf
@@ -263,16 +278,20 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
                 # execute instruction list on DPUs
                 if cmd_arr.nb_cmds:
-                    printf("pushing command array\n")  # DEBUG
+                    IF CYTHON_DEBUG == 1:
+                        printf("pushing command array\n")  # DEBUG
                     pushCommandArray(p, &cmd_arr)
-                    printf("syncing results\n")  # DEBUG
+                    IF CYTHON_DEBUG == 1:
+                        printf("syncing results\n")  # DEBUG
                     syncCommandArrayResults(p, &cmd_arr, res)
-                    printf("received results\n")  # DEBUG
-                    printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
+                    IF CYTHON_DEBUG == 1:
+                        printf("received results\n")  # DEBUG
+                        printf("nb_gini = %i, nb_minmax = %i\n", res.nb_gini, res.nb_minmax)
 
                 minmax_index = 0
                 eval_index = 0
-                printf("frontier length : %ld\n", frontier_length)  #DEBUG
+                IF CYTHON_DEBUG == 1:
+                    printf("frontier length : %ld\n", frontier_length)  #DEBUG
                 # parse and process DPU output
                 for i_record in range(frontier_length):
                     record = &frontier.set_[i_record]
@@ -290,7 +309,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                     n_node_samples = record.n_node_samples
                     weighted_n_node_samples = record.weighted_n_node_samples
 
-                    printf("  record %ld, depth %ld, leaf_index %ld\n", i_record, depth, leaf_index)  # DEBUG
+                    IF CYTHON_DEBUG == 1:
+                        printf("  record %ld, depth %ld, leaf_index %ld\n", i_record, depth, leaf_index)  # DEBUG
 
                     if not has_evaluated:
                         if not has_minmax:
@@ -300,7 +320,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                             minmax_index += 1
 
                         else:
-                            printf("    updating evaluation\n")  # DEBUG
+                            IF CYTHON_DEBUG == 1:
+                                printf("    updating evaluation\n")  # DEBUG
                             rc = splitter.update_evaluation(record, res, eval_index, p)
                             if rc == -1:
                                 break
@@ -311,7 +332,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, is_leaf, best.feature,
                                                  best.threshold, impurity, n_node_samples,
                                                  weighted_n_node_samples)
-                        printf("    added node (split) %ld with parent %ld and %lu samples\n", node_id, parent,
+                        IF CYTHON_DEBUG == 1:
+                            printf("    added node (split) %ld with parent %ld and %lu samples\n", node_id, parent,
                                n_node_samples)  # DEBUG
 
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
@@ -342,12 +364,14 @@ cdef class DpuTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, True, _TREE_UNDEFINED,
                                                  _TREE_UNDEFINED, impurity, n_node_samples,
                                                  weighted_n_node_samples)
-                        printf("    added node (leaf) %ld with parent %ld and %lu samples\n", node_id, parent,
+                        IF CYTHON_DEBUG == 1:
+                            printf("    added node (leaf) %ld with parent %ld and %lu samples\n", node_id, parent,
                                n_node_samples)  # DEBUG
 
                         # TODO: refactor to make the copy once
                         memcpy(splitter.criterion.sum_total, record.sum_total, p.nclasses * sizeof(double))
-                        printf("    sum_total : %f %f %f\n", splitter.criterion.sum_total[0],
+                        IF CYTHON_DEBUG == 1:
+                            printf("    sum_total : %f %f %f\n", splitter.criterion.sum_total[0],
                                splitter.criterion.sum_total[1], splitter.criterion.sum_total[2])  # DEBUG
                         splitter.node_value(tree.value + node_id * tree.value_stride)
 
@@ -374,7 +398,8 @@ cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
     command.feature_index = record.current.feature
     command.leaf_index = record.leaf_index
 
-    printf("    adding minmax on feature %d\n", command.feature_index)  #DEBUG
+    IF CYTHON_DEBUG == 1:
+        printf("    adding minmax on feature %d\n", command.feature_index)  #DEBUG
 
     addCommand(cmd_arr, command[0])
 
@@ -388,7 +413,8 @@ cdef inline int add_evaluate_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.current.threshold
 
-    printf("    adding evaluate on feature %d with threshold %f\n", command.feature_index,
+    IF CYTHON_DEBUG == 1:
+        printf("    adding evaluate on feature %d with threshold %f\n", command.feature_index,
            command.feature_threshold)  #DEBUG
 
     addCommand(cmd_arr, command[0])
@@ -401,7 +427,8 @@ cdef inline int add_commit_instruction(Command * command, SetRecord * record,
     command.leaf_index = record.leaf_index
     command.feature_threshold = record.best.threshold
 
-    printf("    adding split on feature %d with threshold %f\n", command.feature_index,
+    IF CYTHON_DEBUG == 1:
+        printf("    adding split on feature %d with threshold %f\n", command.feature_index,
            command.feature_threshold)  #DEBUG
 
     addCommand(cmd_arr, command[0])
