@@ -14,13 +14,14 @@ from ._utils cimport SetRecord
 
 from ._splitter cimport RandomDpuSplitter
 
+DEF CYTHON_DEBUG = 0
+
 cdef extern from "src/trees_common.h":
     int SPLIT_EVALUATE
     int SPLIT_COMMIT
     int SPLIT_MINMAX
     enum: MAX_NB_LEAF
     enum: MAX_CLASSES
-    enum: CYTHON_DEBUG
     struct Command:
         UINT8_t type
         UINT8_t feature_index

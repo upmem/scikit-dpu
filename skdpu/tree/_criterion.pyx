@@ -20,8 +20,7 @@ from ._utils cimport safe_realloc
 from sklearn.tree._utils cimport sizet_ptr_to_ndarray
 from sklearn.tree._utils cimport WeightedMedianCalculator
 
-cdef extern from "src/trees_common.h":
-    enum: CYTHON_DEBUG
+DEF CYTHON_DEBUG = 0
 
 cdef class ClassificationCriterionDpu(Criterion):
     """Abstract criterion for classification."""

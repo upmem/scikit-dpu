@@ -10,8 +10,7 @@ from libc.string cimport memcpy
 from libc.stdlib cimport realloc
 from libc.stdio cimport printf
 
-cdef extern from "src/trees_common.h":
-    enum: CYTHON_DEBUG
+DEF CYTHON_DEBUG = 0
 
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED

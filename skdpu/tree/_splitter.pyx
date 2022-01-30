@@ -34,8 +34,7 @@ cdef extern from "src/trees.h" nogil:
     DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
     void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
 
-cdef extern from "src/trees_common.h":
-    enum: CYTHON_DEBUG
+DEF CYTHON_DEBUG = 0
 
 cdef double INFINITY = np.inf
 
