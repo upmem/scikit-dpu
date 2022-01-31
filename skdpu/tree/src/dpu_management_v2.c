@@ -384,6 +384,8 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
       printf("\n");
     }
   }
+#endif
+#if defined(DEBUG) || defined(MESURE_PERF) || defined(MESURE_BW)
   DPU_FOREACH(p->allset, dpu, each_dpu) {
     DPU_ASSERT(dpu_log_read(dpu, stdout));
   }

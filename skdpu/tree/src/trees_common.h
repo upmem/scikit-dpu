@@ -37,6 +37,7 @@
 // Define the size of features (choose one):
 
 typedef float feature_t;
+#define FEATURE_SIZE_LOG 2
 ////////// OR
 // typedef int8_t int_feature;
 ////////// OR
@@ -61,6 +62,6 @@ struct Command {
 };
 
 #define ALIGN_8_LOW(x) (((x) >> 3) << 3)
-#define ALIGN_8_HIGH(x) (((x + 7) >> 3) << 3)
+#define ALIGN_8_HIGH(x) ((((x) + 7) >> 3) << 3)
 
 #endif
