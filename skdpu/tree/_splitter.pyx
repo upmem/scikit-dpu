@@ -82,6 +82,7 @@ cdef class RandomDpuSplitter(Splitter):
         IF CYTHON_DEBUG == 1:
             print("allocating dpus")
         allocate(p)
+        p.npointperdpu = p.npoints // p.ndpu
         IF CYTHON_DEBUG == 1:
             print("loading kernel")
         kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
