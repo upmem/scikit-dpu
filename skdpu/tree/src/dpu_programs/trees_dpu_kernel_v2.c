@@ -27,6 +27,8 @@
 
 #include "../trees_common.h"
 
+/*#define DEBUG*/
+
 /*------------------ INPUT ------------------------------*/
 /** @name Host
  * Variables for host application communication
@@ -170,26 +172,12 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
       cmds_array[cmd_cnt].type == SPLIT_MINMAX) {
     uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
     *index_batch = leaf_start_index[leaf_index];
-    // this is a first batch so need to initialize the gini count
-    //if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
-    //  // first batch of this SPLIT_EVALUATE command
-    //  // Need to initialize the gini_cnt for this leaf
-    //  uint32_t start_index =
-    //      res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
-    //  memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
-    //} else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
-    //  // initialize min_max_feature for this leaf
-    //  // TODO here assume that feature_t is a multiple of 4
-    //  uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
-    //  mram_write(min_max_init, &min_max_feature[start_index],
-    //             2 * sizeof(feature_t));
-    //}
   } else {
     // commit case
     *index_batch = 0;
     // specific case where the split feature is feature 0
     // directly skip it
-    if(cmds_array[cmd_cnt].feature_index == 0)
+    if (cmds_array[cmd_cnt].feature_index == 0)
       *index_batch = 1;
   }
   return true;
@@ -253,21 +241,6 @@ static bool get_next_batch(uint16_t *index_cmd, uint32_t *index_batch) {
     // no next batch, go to next command
     res = get_next_batch_commit(index_cmd, index_batch, &first_batch);
   }
-  //if (res && first_batch) {
-  //  if (cmds_array[*index_cmd].type == SPLIT_EVALUATE) {
-  //    // first batch of this SPLIT_EVALUATE command
-  //    // Need to initialize the gini_cnt for this leaf
-  //    uint32_t start_index =
-  //        res_indexes[cmds_array[*index_cmd].leaf_index] * 2 * n_classes;
-  //    memset(&gini_cnt[start_index], 0, 2 * n_classes * sizeof(uint32_t));
-  //  } else if (cmds_array[*index_cmd].type == SPLIT_MINMAX) {
-  //    // initialize min_max_feature for this leaf
-  //    // TODO here assume that feature_t is a multiple of 4
-  //    uint32_t start_index = res_indexes[cmds_array[*index_cmd].leaf_index] * 2;
-  //    mram_write(min_max_init, &min_max_feature[start_index],
-  //               2 * sizeof(feature_t));
-  //  }
-  //}
   mutex_unlock(batch_mutex);
   return res;
 }
@@ -390,14 +363,15 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
   }
 
 #ifdef DEBUG
-  // for each class, the gini count low+high should be less than the number of points
-  // in the leaf
-  uint32_t npoints_leaf = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
+  // for each class, the gini count low+high should be less than the number of
+  // points in the leaf
+  uint32_t npoints_leaf =
+      leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
   uint32_t tot = 0;
   for (int i = 0; i < n_classes; ++i) {
     tot += c_gini_cnt[me()][i] + c_gini_cnt[me()][i + n_classes];
   }
-  if(tot > npoints_leaf) {
+  if (tot > npoints_leaf) {
     printf("ERROR: gini count inexact: %u > %u\n", tot, npoints_leaf);
   }
 #endif
@@ -422,7 +396,8 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
       leaf_end_index[cmds_array[index_cmd].leaf_index])
     size_batch = leaf_end_index[cmds_array[index_cmd].leaf_index] - index_batch;
 
-  if(!size_batch) return;
+  if (!size_batch)
+    return;
 
   feature_t *features_val =
       load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
@@ -472,7 +447,8 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
       leaf_end_index[cmds_array[index_cmd].leaf_index])
     size_batch = leaf_end_index[cmds_array[index_cmd].leaf_index] - index_batch;
 
-  if(!size_batch) return;
+  if (!size_batch)
+    return;
 
   feature_t *features_val =
       load_feature_values(index_batch, cmds_array[index_cmd].feature_index,
@@ -745,9 +721,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                              cmds_array[index_cmd].feature_threshold) +
             start_index_low;
 
-    if(size)
-    store_feature_values(start_index_low, feature_index, size,
-                         feature_values[me()]);
+    if (size)
+      store_feature_values(start_index_low, feature_index, size,
+                           feature_values[me()]);
 
     if (size < SIZE_BATCH)
       mutex_unlock(commit_mutex);
@@ -914,11 +890,11 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       start_swap_buffer = pivot - (prolog_end - prolog_start);
 
     uint32_t swap_index = 0;
-    if(max_n_elems_pivot) {
+    if (max_n_elems_pivot) {
 
       feature_t *feature_values_pivot =
-        load_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
-            feature_values3[me()]);
+          load_feature_values(start_swap_buffer, feature_index,
+                              max_n_elems_pivot, feature_values3[me()]);
 
       feature_t lower_than_threshold = cmds_array[index_cmd].feature_threshold;
       for (int i = 0; i < prolog_end - prolog_start; ++i) {
@@ -926,7 +902,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
             cmds_array[index_cmd].feature_threshold) {
           assert(pivot);
           swap(&feature_values_prolog[i],
-              &feature_values_pivot[max_n_elems_pivot - (++swap_index)]);
+               &feature_values_pivot[max_n_elems_pivot - (++swap_index)]);
           feature_values_prolog_cmp[i] = lower_than_threshold;
           if (swap_index >= max_n_elems_pivot)
             break;
@@ -941,9 +917,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       uint32_t pivot_prolog = partition_buffer(
           feature_values_prolog, feature_values_prolog_cmp,
           prolog_end - prolog_start, cmds_array[index_cmd].feature_threshold);
-      /*pivot = start_index + pivot_prolog;*/
+
       pivot = prolog_start + pivot_prolog;
-      /*max_n_elems_pivot = prolog_end - prolog_start;*/
     }
 
     // Need to store the values back in MRAM, but need to handle
@@ -957,9 +932,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     store_feature_values(prolog_start, feature_index, prolog_end - prolog_start,
                          feature_values[me()]);
 
-    if(max_n_elems_pivot)
+    if (max_n_elems_pivot)
       store_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
-          feature_values3[me()]);
+                           feature_values3[me()]);
   }
   // epilog
   uint32_t epilog_start = start_index + size;
@@ -983,21 +958,23 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     }
 
     uint32_t swap_index = 0;
-    if(max_n_elems_pivot) {
+    if (max_n_elems_pivot) {
 
       feature_t *feature_values_pivot = load_feature_values(
           pivot, feature_index, max_n_elems_pivot, feature_values3[me()]);
-      if(max_n_elems_pivot > SIZE_BATCH + 16) {
-        printf("ERROR: size too big %u > %u\n", max_n_elems_pivot, SIZE_BATCH + 16);
+      if (max_n_elems_pivot > SIZE_BATCH + 16) {
+        printf("ERROR: size too big %u > %u\n", max_n_elems_pivot,
+               SIZE_BATCH + 16);
       }
 
       feature_t bigger_than_threshold =
-        cmds_array[index_cmd].feature_threshold + 1;
+          cmds_array[index_cmd].feature_threshold + 1;
       for (int i = 0; i < epilog_end - epilog_start; ++i) {
         if (feature_values_epilog_cmp[i] <=
             cmds_array[index_cmd].feature_threshold) {
-          if(swap_index >= max_n_elems_pivot)
-            printf("ERROR swap_index %u max %u\n", swap_index, max_n_elems_pivot);
+          if (swap_index >= max_n_elems_pivot)
+            printf("ERROR swap_index %u max %u\n", swap_index,
+                   max_n_elems_pivot);
           swap(&feature_values_epilog[i], &feature_values_pivot[swap_index++]);
           feature_values_epilog_cmp[i] = bigger_than_threshold;
           if (swap_index >= max_n_elems_pivot)
@@ -1017,9 +994,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     store_feature_values(epilog_start, feature_index, epilog_end - epilog_start,
                          feature_values[me()]);
 
-    if(max_n_elems_pivot)
+    if (max_n_elems_pivot)
       store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
-          feature_values3[me()]);
+                           feature_values3[me()]);
   }
   mutex_unlock(commit_mutex);
 
@@ -1030,7 +1007,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     // In this case it will be empty
 #ifdef DEBUG
     printf("pivot found %u\n", pivot);
-    uint32_t parent_cnt = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
+    uint32_t parent_cnt =
+        leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 #endif
     assert(index_new_leaf < MAX_NB_LEAF);
     uint32_t index_tmp = leaf_end_index[leaf_index];
@@ -1041,10 +1019,13 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     n_leaves++;
     mutex_unlock(n_leaves_mutex);
 #ifdef DEBUG
-    printf("tid %u index_cmd %u Created 2 leaves: left index %u cnt %u, right inex %u cnt %u, parent index %u cnt %u\n",
-        me(), index_cmd,
-        leaf_index, leaf_end_index[leaf_index] - leaf_start_index[leaf_index], index_new_leaf, 
-        leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf], leaf_index, parent_cnt); 
+    printf("tid %u index_cmd %u Created 2 leaves: left index %u cnt %u, right "
+           "inex %u cnt %u, parent index %u cnt %u\n",
+           me(), index_cmd, leaf_index,
+           leaf_end_index[leaf_index] - leaf_start_index[leaf_index],
+           index_new_leaf,
+           leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf],
+           leaf_index, parent_cnt);
 #endif
   }
 
@@ -1061,7 +1042,8 @@ void do_empty_commit(uint16_t index_cmd, uint16_t index_new_leaf) {
 
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
 #ifdef DEBUG
-  uint32_t parent_cnt = leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
+  uint32_t parent_cnt =
+      leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 #endif
   assert(index_new_leaf < MAX_NB_LEAF);
   uint32_t index_tmp = leaf_end_index[leaf_index];
@@ -1071,9 +1053,12 @@ void do_empty_commit(uint16_t index_cmd, uint16_t index_new_leaf) {
   n_leaves++;
   mutex_unlock(n_leaves_mutex);
 #ifdef DEBUG
-  printf("Created empty leaves: left index %u cnt %u, right inex %u cnt %u, parent index %u cnt %u\n",
-        leaf_index, leaf_end_index[leaf_index] - leaf_start_index[leaf_index], index_new_leaf, 
-        leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf], leaf_index, parent_cnt); 
+  printf("Created empty leaves: left index %u cnt %u, right inex %u cnt %u, "
+         "parent index %u cnt %u\n",
+         leaf_index, leaf_end_index[leaf_index] - leaf_start_index[leaf_index],
+         index_new_leaf,
+         leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf],
+         leaf_index, parent_cnt);
 #endif
 }
 
@@ -1090,6 +1075,14 @@ static uint16_t get_new_leaf_index(uint16_t index_cmd) {
   return start_n_leaves + n_commits;
 }
 
+/**
+ * Generate the indexes for the results of
+ * SPLIT_EVALUATE and SPLIT_MINMAX commands
+ * The results are stored in the same order than
+ * the commands are received.
+ * Also intialize gini counts to 0 and min/max to
+ * FLT_MAX/-FLT_MAX
+ **/
 static void gen_res_indexes() {
 
   uint16_t index_gini = 0;
@@ -1099,7 +1092,7 @@ static void gen_res_indexes() {
       res_indexes[cmds_array[i].leaf_index] = index_gini++;
     } else if (cmds_array[i].type == SPLIT_MINMAX) {
       mram_write(min_max_init, &min_max_feature[index_minmax * 2],
-          2 * sizeof(feature_t));
+                 2 * sizeof(feature_t));
       res_indexes[cmds_array[i].leaf_index] = index_minmax++;
     }
   }
@@ -1154,9 +1147,9 @@ int main() {
     memset(cmd_tasklet_cnt, 0, nb_cmds);
     start_n_leaves = n_leaves;
     gen_res_indexes();
-    // DEBUG
 #ifdef DEBUG
-    printf("n_points %u, n_features %u, n_classes %u\n", n_points, n_features, n_classes);
+    printf("n_points %u, n_features %u, n_classes %u\n", n_points, n_features,
+           n_classes);
     printf("start_n_leaves: %u\n", start_n_leaves);
     printf("n_cmds: %u\n", nb_cmds);
 #endif
@@ -1166,10 +1159,8 @@ int main() {
   uint16_t index_cmd = 0;
   uint32_t index_batch = 0;
 
-  /*printf("index of command %u command type %u\n", 1, cmds_array[1].type);*/
   while (get_next_batch(&index_cmd, &index_batch)) {
 
-    /*printf("batch index_batch %u index of command %u command type %u\n", index_batch, 1, cmds_array[1].type);*/
     if (cmds_array[index_cmd].type == SPLIT_EVALUATE) {
 
       do_split_evaluate(index_cmd, index_batch);
@@ -1179,15 +1170,13 @@ int main() {
       uint16_t leaf_index = cmds_array[cmd_cnt].leaf_index;
       assert(leaf_start_index[leaf_index] <= leaf_end_index[leaf_index]);
 
-      // if the targeted leaf is empty, create a new empty leaf 
+      // if the targeted leaf is empty, create a new empty leaf
       // this is to be coherent with other dpus
       bool empty = leaf_start_index[leaf_index] == leaf_end_index[leaf_index];
 
-      if(!empty && 
-          cmds_array[index_cmd].feature_index < n_features)
+      if (!empty && cmds_array[index_cmd].feature_index < n_features)
         do_split_commit(index_cmd, index_batch, 0);
 
-      /*printf("batch index_batch %u after commit index of command %u command type %u\n", index_batch, 1, cmds_array[1].type);*/
       bool last = false;
       mutex_lock(commit_mutex);
       if (++cmd_tasklet_cnt[index_cmd] == n_features)
@@ -1195,14 +1184,14 @@ int main() {
       mutex_unlock(commit_mutex);
 
       if (last) {
-        if(!empty) {
+        if (!empty) {
 #ifdef DEBUG
-          printf("tid %u handles last feature %u\n", me(), cmds_array[index_cmd].feature_index);
+          printf("tid %u handles last feature %u\n", me(),
+                 cmds_array[index_cmd].feature_index);
 #endif
           do_split_commit(index_cmd, cmds_array[index_cmd].feature_index,
-              get_new_leaf_index(index_cmd));
-        }
-        else {
+                          get_new_leaf_index(index_cmd));
+        } else {
           do_empty_commit(index_cmd, get_new_leaf_index(index_cmd));
         }
       }
@@ -1213,9 +1202,8 @@ int main() {
 
     } else {
       // TODO error handling
-#ifdef DEBUG
-      printf("index of command %u command type %u\n", index_cmd, cmds_array[index_cmd].type);
-#endif
+      printf("index of command %u command type %u\n", index_cmd,
+             cmds_array[index_cmd].type);
       assert(0 && "Unknown command");
       return 0;
     }
@@ -1230,14 +1218,13 @@ int main() {
   barrier_wait(&barrier);
 #endif
 
-  // DEBUG
 #ifdef DEBUG
   if (me() == 0) {
     printf("gini_cnt on dpu:\n");
     uint32_t dbg_eval_cnt = 0;
     for (uint32_t j = 0; j < nb_cmds; j++) {
       if (cmds_array[j].type == SPLIT_EVALUATE) {
-        for (uint32_t i = 0; i<6; i++)
+        for (uint32_t i = 0; i < 6; i++)
           printf("%u ", gini_cnt[6 * dbg_eval_cnt + i]);
         printf("\n");
         dbg_eval_cnt++;
