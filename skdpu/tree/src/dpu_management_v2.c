@@ -20,11 +20,10 @@
 void allocate(Params *p) {
 
   assert(p);
-  if(p->ndpu == 0){
+  if (p->ndpu == 0) {
     DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, NULL, &(p->allset)));
     DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
-  }
-  else
+  } else
     DPU_ASSERT(dpu_alloc(p->ndpu, NULL, &(p->allset)));
 }
 
@@ -122,14 +121,15 @@ dpu_error_t dpu_rank_points_vector_callback(struct dpu_set_t rank,
 }
 
 /**
- * @brief Builds a 2D jagged array (pointer array) from the pointer to the flat array of features.
- * 
+ * @brief Builds a 2D jagged array (pointer array) from the pointer to the flat
+ array of features.
+ *
  * @param p Algorithm parameters.
  * @param features_flat [in] flat array of features.
- 
+
  */
-feature_t ** build_jagged_array(Params *p, feature_t *features_flat) {
-  feature_t ** features;
+feature_t **build_jagged_array(Params *p, feature_t *features_flat) {
+  feature_t **features;
 
   features = (feature_t **)malloc(p->npoints * sizeof(*features));
   features[0] = features_flat;
@@ -148,7 +148,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   printf("populating DPUs\n");
   printf("number of features: %d\n", p->nfeatures);
   printf("first point:\n");
-  for(uint32_t i = 0; i < p->nfeatures; i++)
+  for (uint32_t i = 0; i < p->nfeatures; i++)
     printf("%f\n", features[0][i]);
   printf("\n");
 #endif
@@ -204,12 +204,12 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   printf("looping over batches\n");
 #endif
   uint32_t nb_batches =
-      ((n_points_align * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
+      (((points_rest ? nr_points_dpu + 1 : nr_points_dpu) * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
       SIZE_BATCH_POINT_TRANSFER;
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
-    DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
-                            cb_args, DPU_CALLBACK_ASYNC));
+    DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback, cb_args,
+                            DPU_CALLBACK_ASYNC));
 
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
       DPU_FOREACH(rank, dpu, each_dpu) {
@@ -219,7 +219,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = (n_points_align * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = ((points_rest ? nr_points_dpu + 1 : nr_points_dpu) * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_features",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
@@ -230,13 +230,13 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 #ifdef DEBUG
   printf("handling the targets\n");
 #endif
-  nb_batches = (n_points_align + SIZE_BATCH_POINT_TRANSFER - 1) /
+  nb_batches = ((points_rest ? nr_points_dpu + 1 : nr_points_dpu) + SIZE_BATCH_POINT_TRANSFER - 1) /
                SIZE_BATCH_POINT_TRANSFER;
 
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
-    DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback,
-                            cb_args, DPU_CALLBACK_ASYNC));
+    DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback, cb_args,
+                            DPU_CALLBACK_ASYNC));
 
     // TODO the DPU_XFER_NO_RESET flag does not seem to work with async
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
@@ -247,7 +247,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = n_points_align - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = (points_rest ? nr_points_dpu + 1 : nr_points_dpu) - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_targets",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
@@ -284,7 +284,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
   }
   DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "leaf_end_index", 0,
-                              sizeof(uint32_t), DPU_XFER_ASYNC));
+                           sizeof(uint32_t), DPU_XFER_ASYNC));
 
   // synchronize all ranks
 #ifdef DEBUG
@@ -375,11 +375,11 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
 #ifdef DEBUG
   //DEBUG: print the transfered arrays
   printf("array seen on C side\n");
-  for(uint32_t i=0; i < nb_gini_cmds; i++) {
+  for (uint32_t i = 0; i < nb_gini_cmds; i++) {
     printf("Gini command %i:\n", i);
     DPU_FOREACH(p->allset, dpu, each_dpu) {
       printf("DPU #%i :", each_dpu);
-      for(uint32_t j=0; j < 2*p->nclasses; j++)
+      for (uint32_t j = 0; j < 2 * p->nclasses; j++)
         printf("%i ", res[each_dpu].gini_cnt[i * 2 * p->nclasses + j]);
       printf("\n");
     }
