@@ -204,7 +204,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   printf("looping over batches\n");
 #endif
   uint32_t nb_batches =
-      ((n_points_align * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
+      (((points_rest ? nr_points_dpu + 1 : nr_points_dpu) * p->nfeatures) + SIZE_BATCH_POINT_TRANSFER - 1) /
       SIZE_BATCH_POINT_TRANSFER;
   for (uint32_t i = 0; i < nb_batches; ++i) {
 
@@ -219,7 +219,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = (n_points_align * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = ((points_rest ? nr_points_dpu + 1 : nr_points_dpu) * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_features",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
@@ -230,7 +230,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 #ifdef DEBUG
   printf("handling the targets\n");
 #endif
-  nb_batches = (n_points_align + SIZE_BATCH_POINT_TRANSFER - 1) /
+  nb_batches = ((points_rest ? nr_points_dpu + 1 : nr_points_dpu) + SIZE_BATCH_POINT_TRANSFER - 1) /
                SIZE_BATCH_POINT_TRANSFER;
 
   for (uint32_t i = 0; i < nb_batches; ++i) {
@@ -247,7 +247,7 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     }
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
-      size = n_points_align - (i * SIZE_BATCH_POINT_TRANSFER);
+      size = (points_rest ? nr_points_dpu + 1 : nr_points_dpu) - (i * SIZE_BATCH_POINT_TRANSFER);
     }
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_targets",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),

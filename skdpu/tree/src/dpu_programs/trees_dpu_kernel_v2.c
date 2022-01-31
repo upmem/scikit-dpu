@@ -27,7 +27,6 @@
 
 #include "../trees_common.h"
 
-/*#define DEBUG*/
 //#define MESURE_PERF
 #ifdef MESURE_PERF
 #include <perfcounter.h>
