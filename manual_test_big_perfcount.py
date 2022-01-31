@@ -9,8 +9,8 @@ from skdpu.tree import _perfcounter as _perfcounter_dpu
 from hurry.filesize import size
 
 ndpu = 500
-npoints_per_dpu = 1000
-nfeatures = 16
+npoints_per_dpu = 10000
+nfeatures = 67
 
 data_size = npoints_per_dpu * (nfeatures + 1) * 4
 print(f"data size per dpu= {size(data_size)}")
