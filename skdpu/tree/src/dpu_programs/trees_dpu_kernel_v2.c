@@ -28,6 +28,10 @@
 #include "../trees_common.h"
 
 /*#define DEBUG*/
+//#define MESURE_PERF
+#ifdef MESURE_PERF
+#include <perfcounter.h>
+#endif
 
 /*------------------ INPUT ------------------------------*/
 /** @name Host
@@ -155,6 +159,14 @@ __dma_aligned feature_t min_max_init[2] = {FLT_MAX, -FLT_MAX};
 MUTEX_INIT(commit_mutex);
 uint8_t cmd_tasklet_cnt[MAX_NB_LEAF] = {0};
 
+#ifdef MESURE_PERF
+perfcounter_t nb_cycles_evaluate[NR_TASKLETS] = {0};
+perfcounter_t nb_cycles_commit[NR_TASKLETS] = {0};
+perfcounter_t nb_cycles_minmax[NR_TASKLETS] = {0};
+uint64_t nb_bytes_loaded[NR_TASKLETS] = {0};
+uint64_t nb_bytes_written[NR_TASKLETS] = {0};
+#endif
+
 /**
  * @brief each tasklet gets a next batch to execute when it is ready
  * Each command is divided in a certain number of batches
@@ -277,6 +289,10 @@ static feature_t *load_feature_values(uint32_t index_batch,
     mram_read(&t_features[start_index_8align], feature_values_in,
               size_batch_8align * sizeof(feature_t));
 
+#ifdef MESURE_PERF
+  nb_bytes_loaded[me()] += size_batch_8align * sizeof(feature_t);
+#endif
+
   return feature_values_in + diff;
 }
 
@@ -325,6 +341,11 @@ static void store_feature_values(uint32_t index_batch, uint16_t feature_index,
   else
     mram_write(feature_values_in, &t_features[start_index_8align],
                size_batch_8align * sizeof(feature_t));
+
+#ifdef MESURE_PERF
+  nb_bytes_written[me()] += size_batch_8align * sizeof(feature_t);
+#endif
+
 }
 
 /**
@@ -342,6 +363,10 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
   uint32_t start_index = res_indexes[leaf_index] * 2 * n_classes;
   mram_read(&gini_cnt[start_index], c_gini_cnt[me()],
             2 * n_classes * sizeof(uint32_t));
+
+#ifdef MESURE_PERF
+  nb_bytes_loaded[me()] += 2 * n_classes * sizeof(uint32_t);
+#endif
 
   // update gini low count
   for (int i = 0; i < n_classes; ++i) {
@@ -380,6 +405,10 @@ static void update_gini_cnt(uint16_t leaf_index, uint32_t *gini_cnt_low,
   mram_write(c_gini_cnt[me()], &gini_cnt[start_index],
              2 * n_classes * sizeof(uint32_t));
   mutex_unlock(gini_mutex);
+
+#ifdef MESURE_PERF
+  nb_bytes_written[me()] += 2 * n_classes * sizeof(uint32_t);
+#endif
 }
 
 /**
@@ -391,6 +420,10 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
   printf("do_split_evaluate %d cmd %u batch %u\n", me(), index_cmd,
          index_batch);
 #endif
+#ifdef MESURE_PERF
+  perfcounter_t start_time = perfcounter_get();
+#endif
+
   uint16_t size_batch = SIZE_BATCH;
   if (index_batch + SIZE_BATCH >
       leaf_end_index[cmds_array[index_cmd].leaf_index])
@@ -428,6 +461,9 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
   update_gini_cnt(cmds_array[index_cmd].leaf_index, w_gini_cnt_low[me()],
                   w_gini_cnt_high[me()]);
 
+#ifdef MESURE_PERF
+  nb_cycles_evaluate[me()] = perfcounter_get() - start_time;
+#endif
 #ifdef DEBUG
   printf("do_split_evaluate end %d cmd %u batch %u\n", me(), index_cmd,
          index_batch);
@@ -442,6 +478,11 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
 #ifdef DEBUG
   printf("do_split_minmax %d cmd %u batch %u\n", me(), index_cmd, index_batch);
 #endif
+
+#ifdef MESURE_PERF
+  perfcounter_t start_time = perfcounter_get();
+#endif
+
   uint16_t size_batch = SIZE_BATCH;
   if (index_batch + SIZE_BATCH >
       leaf_end_index[cmds_array[index_cmd].leaf_index])
@@ -488,11 +529,19 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
          me(), index_cmd, index_batch, c_minmax[0], min, c_minmax[1], max,
          write);
 #endif
-  if (write)
+  if (write) {
     mram_write(c_minmax, &min_max_feature[res_index * 2],
-               2 * sizeof(feature_t));
+        2 * sizeof(feature_t));
+#ifdef MESURE_PERF
+    nb_bytes_written[me()] += 2 * sizeof(feature_t);
+#endif
+  }
   mutex_unlock(minmax_mutex);
 
+#ifdef MESURE_PERF
+  nb_bytes_loaded[me()] += 2 * sizeof(feature_t);
+  nb_cycles_minmax[me()] = perfcounter_get() - start_time;
+#endif
 #ifdef DEBUG
   printf("do_split_minmax end %d cmd %u batch %u\n", me(), index_cmd,
          index_batch);
@@ -634,6 +683,10 @@ static void store_feature_values_noalign(uint32_t start_index,
     mram_write(feature_values_in,
                &t_features[FEATURE_INDEX(feature_index) + start_index],
                size_batch * sizeof(feature_t));
+
+#ifdef MESURE_PERF
+  nb_bytes_written[me()] += size_batch * sizeof(feature_t);
+#endif
 }
 
 /**
@@ -676,6 +729,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 #ifdef DEBUG
   printf("do_split_commit tid %d index_cmd %u feature_index %u\n", me(),
          index_cmd, feature_index);
+#endif
+#ifdef MESURE_PERF
+  perfcounter_t start_time = perfcounter_get();
 #endif
 
   uint32_t start_index = 0, size = 0;
@@ -962,19 +1018,23 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
       feature_t *feature_values_pivot = load_feature_values(
           pivot, feature_index, max_n_elems_pivot, feature_values3[me()]);
+#ifdef DEBUG
       if (max_n_elems_pivot > SIZE_BATCH + 16) {
         printf("ERROR: size too big %u > %u\n", max_n_elems_pivot,
                SIZE_BATCH + 16);
       }
+#endif
 
       feature_t bigger_than_threshold =
           cmds_array[index_cmd].feature_threshold + 1;
       for (int i = 0; i < epilog_end - epilog_start; ++i) {
         if (feature_values_epilog_cmp[i] <=
             cmds_array[index_cmd].feature_threshold) {
+#ifdef DEBUG
           if (swap_index >= max_n_elems_pivot)
             printf("ERROR swap_index %u max %u\n", swap_index,
                    max_n_elems_pivot);
+#endif
           swap(&feature_values_epilog[i], &feature_values_pivot[swap_index++]);
           feature_values_epilog_cmp[i] = bigger_than_threshold;
           if (swap_index >= max_n_elems_pivot)
@@ -1029,6 +1089,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 #endif
   }
 
+#ifdef MESURE_PERF
+  nb_cycles_commit[me()] = perfcounter_get() - start_time;
+#endif
 #ifdef DEBUG
   printf("do_split_commit end tid %d index_cmd %u feature_index %u\n", me(),
          index_cmd, feature_index);
@@ -1093,6 +1156,9 @@ static void gen_res_indexes() {
     } else if (cmds_array[i].type == SPLIT_MINMAX) {
       mram_write(min_max_init, &min_max_feature[index_minmax * 2],
                  2 * sizeof(feature_t));
+#ifdef MESURE_PERF
+      nb_bytes_written[me()] += 2 * sizeof(feature_t);
+#endif
       res_indexes[cmds_array[i].leaf_index] = index_minmax++;
     }
   }
@@ -1153,11 +1219,20 @@ int main() {
     printf("start_n_leaves: %u\n", start_n_leaves);
     printf("n_cmds: %u\n", nb_cmds);
 #endif
+#ifdef MESURE_PERF
+    perfcounter_config(COUNT_CYCLES, true);
+#endif
   }
   barrier_wait(&barrier);
 
   uint16_t index_cmd = 0;
   uint32_t index_batch = 0;
+
+#ifdef MESURE_PERF
+  perfcounter_t start_time = 0;
+  if(me() == 0)
+    start_time = perfcounter_get();
+#endif
 
   while (get_next_batch(&index_cmd, &index_batch)) {
 
@@ -1210,6 +1285,32 @@ int main() {
   }
 
   barrier_wait(&barrier);
+
+#ifdef MESURE_PERF
+  if(me() == 0) {
+    perfcounter_t end_time = perfcounter_get();
+    printf("Total number of cycles: %lu\n", end_time - start_time);
+    perfcounter_t evaluate_time = 0, minmax_time = 0, commit_time = 0;
+    uint64_t bytes_loaded = 0, bytes_written = 0;
+    for(uint8_t t = 0; t < NR_TASKLETS; ++t) {
+      evaluate_time += nb_cycles_evaluate[t];
+      minmax_time += nb_cycles_minmax[t];
+      commit_time += nb_cycles_commit[t];
+      bytes_loaded += nb_bytes_loaded[t];
+      bytes_written += nb_bytes_written[t];
+    }
+    printf("Evaluate number of cycles: %lu %.2f perc.\n", 
+        evaluate_time, (float)evaluate_time / (NR_TASKLETS * (end_time - start_time)));
+    printf("Minmax number of cycles: %lu %.2f perc.\n", 
+        minmax_time, (float)minmax_time / (NR_TASKLETS * (end_time - start_time)));
+    printf("Commit number of cycles: %lu %.2f perc.\n", 
+        commit_time, (float)commit_time / (NR_TASKLETS * (end_time - start_time)));
+
+    printf("Number of bytes loaded from MRAM %lu\n", bytes_loaded);
+    printf("Number of bytes written to MRAM %lu\n", bytes_written);
+    printf("Utilized bandwidth %e B/sec\n", (float)(bytes_loaded + bytes_written) * 4.25e8 / (end_time - start_time));
+  }
+#endif
 
 #ifdef TEST
   if (me() == 0) {
