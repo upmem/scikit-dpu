@@ -52,7 +52,6 @@ def configuration(parent_package="", top_path=None):
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
         extra_compile_args=extra_compile_args,
-        define_macros=[("CYTHON_DEBUG", "0")]
     )
     config.add_extension(
         "_splitter",
@@ -60,7 +59,6 @@ def configuration(parent_package="", top_path=None):
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
         extra_compile_args=extra_compile_args,
-        define_macros=[("CYTHON_DEBUG", "0")]
     )
     config.add_extension(
         "_criterion",
@@ -68,7 +66,6 @@ def configuration(parent_package="", top_path=None):
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
         extra_compile_args=extra_compile_args,
-        define_macros=[("CYTHON_DEBUG", "0")]
     )
     config.add_extension(
         "_utils",
@@ -76,7 +73,6 @@ def configuration(parent_package="", top_path=None):
         include_dirs=[numpy.get_include(), dpu_pkg_config_include],
         libraries=libraries + [dpu_pkg_config_libs],
         extra_compile_args=extra_compile_args,
-        define_macros=[("CYTHON_DEBUG", "0")]
     )
 
     # config.add_subpackage("tests")
