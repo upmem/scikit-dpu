@@ -9,7 +9,7 @@ from skdpu.tree import _perfcounter as _perfcounter_dpu
 from hurry.filesize import size
 
 ndpu = 500
-npoints_per_dpu = 1000
+npoints_per_dpu = 20000
 nfeatures = 16
 
 data_size = npoints_per_dpu * (nfeatures + 1) * 4
@@ -27,7 +27,7 @@ y_pred = clf.predict(X)
 dpu_accuracy = accuracy_score(y, y_pred)
 
 print(f"Accuracy for DPUs: {dpu_accuracy}")
-print(f"build time for CPUs : {_perfcounter_dpu.time_taken} s")
+print(f"build time for DPUs : {_perfcounter_dpu.time_taken} s")
 print(f"total time for DPUs: {toc - tic} s")
 
 clf2 = DecisionTreeClassifier(random_state=1, criterion='gini', splitter='random', max_depth=10)

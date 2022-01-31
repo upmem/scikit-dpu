@@ -9,7 +9,9 @@ from ._splitter cimport RandomDpuSplitter
 from sklearn.tree._splitter cimport SplitRecord
 
 cdef extern from "src/trees_common.h":
-    enum: MAX_CLASSES  # if there's a bug here try enum: MAX_CLASSES
+    enum: MAX_CLASSES
+
+DEF MAX_FEATURES=68
 
 ctypedef np.npy_float32 DTYPE_t          # Type of X
 ctypedef np.npy_float64 DOUBLE_t         # Type of y, sample_weight
@@ -50,8 +52,8 @@ cdef struct SetRecord:
     double current_proxy_improvement
     SplitRecord current
     SplitRecord best
-    SIZE_t features[MAX_CLASSES]
-    SIZE_t constant_features[MAX_CLASSES]
+    SIZE_t features[MAX_FEATURES]
+    SIZE_t constant_features[MAX_FEATURES]
     double sum_total[MAX_CLASSES]
     double sum_left[MAX_CLASSES]
     double sum_right[MAX_CLASSES]

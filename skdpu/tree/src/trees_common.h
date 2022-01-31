@@ -13,7 +13,7 @@
 /** @name Debug defines
  */
 /**@{*/
-//#define DEBUG [>*< debug switch for the C code (host and DPU) <]
+//#define DEBUG /**< debug switch for the C code (host and DPU) */
 /**@}*/
 
 /** @name Constraints
