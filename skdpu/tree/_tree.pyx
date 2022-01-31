@@ -12,6 +12,9 @@ from libc.string cimport memcpy
 from ._utils cimport Set
 from ._utils cimport SetRecord
 
+from time import perf_counter
+from . import _perfcounter
+
 from ._splitter cimport RandomDpuSplitter
 
 DEF CYTHON_DEBUG = 0
@@ -178,6 +181,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         IF CYTHON_DEBUG == 1:
             print("\nentering nogil")
+        tic = perf_counter()
         with nogil:
             # initializing the results array
             res = <CommandResults *> malloc(p.ndpu * sizeof(CommandResults))
@@ -389,6 +393,8 @@ cdef class DpuTreeBuilder(TreeBuilder):
 
         if rc == -1:
             raise MemoryError()
+        toc = perf_counter()
+        _perfcounter.time_taken = toc - tic
 
         free_dpus(p)
 
