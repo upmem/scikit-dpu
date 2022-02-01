@@ -1,5 +1,5 @@
-# from ._classes import DecisionTreeClassifier
+from ._classes import DecisionTreeClassifierDpu
 
-# __all__ = [
-#     "DecisionTreeClassifier",
-# ]
+__all__ = [
+    "DecisionTreeClassifierDpu",
+]

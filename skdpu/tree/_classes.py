@@ -35,7 +35,7 @@ import numpy as np
 from scipy.sparse import issparse
 
 __all__ = [
-    "DecisionTreeClassifier",
+    "DecisionTreeClassifierDpu",
 ]
 
 # =============================================================================
@@ -341,6 +341,6 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
             self.n_classes_ = self.n_classes_[0]
             self.classes_ = self.classes_[0]
 
-        # self._prune_tree()
+        self._prune_tree()
 
         return self
