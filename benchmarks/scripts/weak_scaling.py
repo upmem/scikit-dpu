@@ -9,8 +9,8 @@ from skdpu.tree import _perfcounter as _perfcounter_dpu
 from hurry.filesize import size
 import pandas as pd
 
-ndpu_list = [10, 30, 100, 300, 1000, 2524]
-npoints_per_dpu = 100000
+ndpu = 2524
+npoints_per_dpu_list = [100, 300, 1000, 3000, 10000, 30000, 100000, 300000]
 nfeatures = 16
 
 accuracies_dpu = []
@@ -20,13 +20,15 @@ build_times_cpu = []
 total_times_dpu = []
 total_times_cpu = []
 
-for i_ndpu, ndpu in enumerate(ndpu_list):
-    print(f"number of dpus : {ndpu}")
+for i_npoints, npoints_per_dpu in enumerate(npoints_per_dpu_list):
+    print(f"number of points per dpu : {npoints_per_dpu}")
     data_size = npoints_per_dpu * (nfeatures + 1) * 4
     print(f"data size per dpu= {size(data_size)}")
 
     X, y = make_blobs(n_samples=ndpu * npoints_per_dpu, n_features=nfeatures, centers=3, random_state=0,
                       center_box=(-1, 1))
+
+    print(y)
 
     clf = DecisionTreeClassifierDpu(random_state=0, criterion='gini_dpu', splitter='random_dpu', ndpu=ndpu,
                                     max_depth=10)
@@ -65,6 +67,6 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
         {"DPU accuracy": accuracies_dpu, "CPU accuracy": accuracies_cpu, "Build time on DPU": build_times_dpu,
          "Build time on CPU": build_times_cpu, "Total time on DPU": total_times_dpu,
          "Total time on CPU": total_times_cpu},
-        index=ndpu_list[:i_ndpu+1])
+        index=npoints_per_dpu_list[:i_npoints+1])
 
-    df.to_csv("strong_scaling.csv")
+    df.to_csv("../weak_scaling.csv")

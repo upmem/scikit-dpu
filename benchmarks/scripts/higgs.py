@@ -94,4 +94,4 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
          "Total time on CPU": total_times_cpu},
         index=ndpu_effective)
 
-    df.to_csv("higgs_results.csv")
+    df.to_csv("../higgs_results.csv")
