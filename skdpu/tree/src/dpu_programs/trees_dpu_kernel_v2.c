@@ -28,7 +28,7 @@
 
 #include "../trees_common.h"
 
-//#define MESURE_PERF
+#define MESURE_PERF
 //#define MESURE_BW
 #if defined(MESURE_PERF) || defined(MESURE_BW)
 #include <perfcounter.h>
@@ -164,11 +164,13 @@ uint8_t cmd_tasklet_cnt[MAX_NB_LEAF] = {0};
 perfcounter_t nb_cycles_evaluate[NR_TASKLETS] = {0};
 perfcounter_t nb_cycles_commit[NR_TASKLETS] = {0};
 perfcounter_t nb_cycles_minmax[NR_TASKLETS] = {0};
-perfcounter_t total_time = 0;
 #endif
 #ifdef MESURE_BW
 uint64_t nb_bytes_loaded[NR_TASKLETS] = {0};
 uint64_t nb_bytes_written[NR_TASKLETS] = {0};
+#endif
+#if defined(MESURE_PERF) || defined(MESURE_BW)
+perfcounter_t total_time = 0;
 #endif
 
 /**
@@ -602,6 +604,7 @@ enum swap_status {
   BOTH_SWAP_COMPLETED
 };
 
+
 /**
  * @brief swap the values of two buffers in order to obtain a buffer
  * with values lower than the threshold and values higher than the threshold.
@@ -612,11 +615,15 @@ enum swap_status {
  **/
 static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
                                      feature_t *b_cmp_low,
-                                     feature_t *b_cmp_high, uint16_t sz,
-                                     feature_t threshold, bool *has_swap) {
+                                     feature_t *b_cmp_high, 
+                                     uint16_t sz,
+                                     uint16_t *low_index,
+                                     uint16_t *high_index,
+                                     feature_t threshold, 
+                                     bool *has_swap) {
 
   *has_swap = false;
-  uint16_t low = 0, high = 0;
+  uint16_t low = *low_index, high = *high_index;
   bool self = b_cmp_low == b_low;
   assert(!self || b_cmp_high == b_high);
   while (low < sz && high < sz) {
@@ -633,6 +640,8 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
     if (!incr) {
       // swap
       swap(b_low + low, b_high + high);
+      low++;
+      high++;
       *has_swap = true;
     }
   }
@@ -641,6 +650,8 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
   while (high < sz && HIGHER_THAN(b_cmp_high[high], threshold))
     high++;
 
+  *low_index = low;
+  *high_index = high;
   if (low >= sz && high >= sz)
     return BOTH_SWAP_COMPLETED;
   if (low >= sz)
@@ -735,6 +746,7 @@ static int partition_buffer(feature_t *feature_values_in,
       pivot++;
       if (pivot != j) {
         swap(feature_values_in + pivot, feature_values_in + j);
+      }
     }
   }
   return ++pivot;
@@ -814,6 +826,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   }
 
   bool load_low = true, load_high = true;
+  uint16_t low_index = 0, high_index = 0;
   while (commit_loop) {
 
     // load buffers for the feature we want to handle the swap for
@@ -821,6 +834,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     if (load_low) {
       feature_values_commit_low = load_feature_values(
           start_index_low, feature_index, SIZE_BATCH, feature_values[me()]);
+      low_index = 0;
       if (!self)
         feature_values_commit_cmp_low =
             load_feature_values(start_index_low, cmp_feature_index, SIZE_BATCH,
@@ -831,6 +845,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     if (load_high) {
       feature_values_commit_high = load_feature_values(
           start_index_high, feature_index, SIZE_BATCH, feature_values3[me()]);
+      high_index = 0;
       if (!self)
         feature_values_commit_cmp_high =
             load_feature_values(start_index_high, cmp_feature_index, SIZE_BATCH,
@@ -843,7 +858,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     enum swap_status status = swap_buffers(
         feature_values_commit_low, feature_values_commit_high,
         feature_values_commit_cmp_low, feature_values_commit_cmp_high,
-        SIZE_BATCH, cmds_array[index_cmd].feature_threshold, &has_swap);
+        SIZE_BATCH, &low_index, &high_index, cmds_array[index_cmd].feature_threshold, &has_swap);
 
     if (status == BOTH_SWAP_COMPLETED) {
 
@@ -906,10 +921,15 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
         // no new buffer
         // paritition the high buffer and write it
-        pivot = partition_buffer(feature_values_commit_high,
-                                 feature_values_commit_cmp_high, SIZE_BATCH,
+        if(high_index < SIZE_BATCH)
+        pivot = partition_buffer(feature_values_commit_high + high_index,
+                                 feature_values_commit_cmp_high + high_index, 
+                                 SIZE_BATCH - high_index,
                                  cmds_array[index_cmd].feature_threshold) +
                 start_index_high;
+        else
+          pivot = start_index_high;
+
         store_feature_values_noalign(start_index_high, feature_index,
                                      SIZE_BATCH, feature_values_commit_high);
         commit_loop = false;
@@ -932,10 +952,14 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
         // no new buffer
         // paritition the low buffer and write it
-        pivot = partition_buffer(feature_values_commit_low,
-                                 feature_values_commit_cmp_low, SIZE_BATCH,
+        if(low_index < SIZE_BATCH)
+        pivot = partition_buffer(feature_values_commit_low + low_index,
+                                 feature_values_commit_cmp_low + low_index, 
+                                 SIZE_BATCH - low_index,
                                  cmds_array[index_cmd].feature_threshold) +
                 start_index_low;
+        else
+          pivot = SIZE_BATCH + start_index_low;
         store_feature_values_noalign(start_index_low, feature_index, SIZE_BATCH,
                                      feature_values_commit_low);
         commit_loop = false;
@@ -1180,10 +1204,10 @@ static void gen_res_indexes() {
     if (cmds_array[i].type == SPLIT_EVALUATE) {
       res_indexes[cmds_array[i].leaf_index] = index_gini++;
     } else if (cmds_array[i].type == SPLIT_MINMAX) {
-      mram_write(min_max_init, &min_max_feature[index_minmax * 2],
-                 2 * sizeof(feature_t));
+      mram_write(min_max_init, &min_max_feature[index_minmax << 1],
+                 sizeof(feature_t) << 1);
 #ifdef MESURE_BW
-      nb_bytes_written[me()] += 2 * sizeof(feature_t);
+      nb_bytes_written[me()] += sizeof(feature_t) << 1;
 #endif
       res_indexes[cmds_array[i].leaf_index] = index_minmax++;
     }
