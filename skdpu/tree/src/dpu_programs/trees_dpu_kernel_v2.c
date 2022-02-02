@@ -633,11 +633,6 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
     if (!incr) {
       // swap
       swap(b_low + low, b_high + high);
-      // if the comparison buffer is the same
-      // dont swap twice
-      if (!self) {
-        swap(b_cmp_low + low, b_cmp_high + high);
-      }
       *has_swap = true;
     }
   }
@@ -740,9 +735,6 @@ static int partition_buffer(feature_t *feature_values_in,
       pivot++;
       if (pivot != j) {
         swap(feature_values_in + pivot, feature_values_in + j);
-        if (!self)
-          swap(feature_values_cmp + pivot, feature_values_cmp + j);
-      }
     }
   }
   return ++pivot;
