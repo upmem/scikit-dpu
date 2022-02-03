@@ -71,7 +71,7 @@ int main() {
   struct Params tree_params;
   tree_params.nfeatures = 4;
   tree_params.npoints = 150;
-  tree_params.ntargets = 3;
+  tree_params.nclasses = 3;
   tree_params.ndpu = 1;
 
   allocate(&tree_params);

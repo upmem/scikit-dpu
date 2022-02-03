@@ -75,8 +75,8 @@ static void test_check_func(uint32_t *expected_gini_cnt_low,
             for (int i = leaf_start_index[l]; i < leaf_end_index[l]; ++i) {
               printf("feature %u: %f\n", f, t_features[f * n_points_align + i]);
 #ifdef PRINT_ERROR_NO_ASSERT
-              if (t_features[split_feature * n_points_align + i] !=
-                  expected_feature_values[split_feature * n_points + i])
+              if (t_features[f * n_points_align + i] !=
+                  expected_feature_values[f * n_points + i])
                 printf(
                     "ASSERT: feature value at index %u found %f expected %f\n",
                     i, t_features[f * n_points_align + i],
