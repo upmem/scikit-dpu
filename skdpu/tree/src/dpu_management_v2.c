@@ -133,7 +133,7 @@ feature_t **build_jagged_array(Params *p, feature_t *features_flat) {
 
   features = (feature_t **)malloc(p->npoints * sizeof(*features));
   features[0] = features_flat;
-  for (int i = 1; i < p->npoints; i++)
+  for (uint32_t i = 1; i < p->npoints; i++)
     features[i] = features[i - 1] + p->nfeatures;
   return features;
 }
