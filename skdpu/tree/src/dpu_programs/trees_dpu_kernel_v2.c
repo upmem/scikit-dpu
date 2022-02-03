@@ -21,14 +21,14 @@
 
 #include <assert.h>
 #include <barrier.h>
+#include <built_ins.h>
 #include <defs.h>
 #include <mram.h>
 #include <mutex.h>
-#include <built_ins.h>
 
 #include "../trees_common.h"
 
-#define MESURE_PERF
+//#define MESURE_PERF
 //#define MESURE_BW
 #if defined(MESURE_PERF) || defined(MESURE_BW)
 #include <perfcounter.h>
@@ -174,29 +174,26 @@ perfcounter_t total_time = 0;
 #endif
 
 /**
- * Floating point comparison is lowered to 
+ * Floating point comparison is lowered to
  * software call by the compiler.
  * Instead cast to integer to force use
  * a more efficient comparison.
  **/
 static bool LOWER_EQ_THAN(float a, float b) {
 
-  if ((*(int*)&a < 0) && (*(int*)&b < 0)) 
-    return *(int*)&b <= *(int*)&a;
-  return *(int*)&a <= *(int*)&b;
+  if ((*(int *)&a < 0) && (*(int *)&b < 0))
+    return *(int *)&b <= *(int *)&a;
+  return *(int *)&a <= *(int *)&b;
 }
 
 static bool LOWER_THAN(float a, float b) {
 
-  if ((*(int*)&a < 0) && (*(int*)&b < 0)) 
-    return *(int*)&b < *(int*)&a;
-  return *(int*)&a < *(int*)&b;
+  if ((*(int *)&a < 0) && (*(int *)&b < 0))
+    return *(int *)&b < *(int *)&a;
+  return *(int *)&a < *(int *)&b;
 }
 
-static bool HIGHER_THAN(float a, float b) {
-
-  return !LOWER_EQ_THAN(a, b);
-}
+static bool HIGHER_THAN(float a, float b) { return !LOWER_EQ_THAN(a, b); }
 
 /**
  * @brief each tasklet gets a next batch to execute when it is ready
@@ -376,7 +373,6 @@ static void store_feature_values(uint32_t index_batch, uint16_t feature_index,
 #ifdef MESURE_BW
   nb_bytes_written[me()] += size_batch_8align << FEATURE_SIZE_LOG;
 #endif
-
 }
 
 /**
@@ -474,7 +470,8 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
   for (int i = 0; i < size_batch; ++i) {
 
     /*if (features_val[i] <= cmds_array[index_cmd].feature_threshold) {*/
-    if (LOWER_EQ_THAN(features_val[i], cmds_array[index_cmd].feature_threshold)) {
+    if (LOWER_EQ_THAN(features_val[i],
+                      cmds_array[index_cmd].feature_threshold)) {
 
       // increment the gini count for this class
 #ifdef DEBUG
@@ -563,7 +560,7 @@ static void do_split_minmax(uint16_t index_cmd, uint32_t index_batch) {
 #endif
   if (write) {
     mram_write(c_minmax, &min_max_feature[res_index * 2],
-        2 * sizeof(feature_t));
+               2 * sizeof(feature_t));
 #ifdef MESURE_BW
     nb_bytes_written[me()] += 2 * sizeof(feature_t);
 #endif
@@ -604,7 +601,6 @@ enum swap_status {
   BOTH_SWAP_COMPLETED
 };
 
-
 /**
  * @brief swap the values of two buffers in order to obtain a buffer
  * with values lower than the threshold and values higher than the threshold.
@@ -615,18 +611,16 @@ enum swap_status {
  **/
 static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
                                      feature_t *b_cmp_low,
-                                     feature_t *b_cmp_high, 
-                                     uint16_t sz,
-                                     uint16_t *low_index,
-                                     uint16_t *high_index,
-                                     feature_t threshold, 
-                                     bool *has_swap) {
+                                     feature_t *b_cmp_high, uint16_t sz,
+                                     uint16_t *low_index, uint16_t *high_index,
+                                     feature_t threshold, bool *has_swap) {
 
   *has_swap = false;
-  uint16_t low = *low_index, high = *high_index;
+  uint16_t low = *low_index;
+  int16_t high = *high_index;
   bool self = b_cmp_low == b_low;
   assert(!self || b_cmp_high == b_high);
-  while (low < sz && high < sz) {
+  while (low < sz && high >= 0) {
 
     bool incr = false;
     if (LOWER_EQ_THAN(b_cmp_low[low], threshold)) {
@@ -634,25 +628,25 @@ static enum swap_status swap_buffers(feature_t *b_low, feature_t *b_high,
       incr = true;
     }
     if (HIGHER_THAN(b_cmp_high[high], threshold)) {
-      high++;
+      high--;
       incr = true;
     }
     if (!incr) {
       // swap
       swap(b_low + low, b_high + high);
       low++;
-      high++;
+      high--;
       *has_swap = true;
     }
   }
   while (low < sz && LOWER_EQ_THAN(b_cmp_low[low], threshold))
     low++;
-  while (high < sz && HIGHER_THAN(b_cmp_high[high], threshold))
-    high++;
+  while (high >= 0 && HIGHER_THAN(b_cmp_high[high], threshold))
+    high--;
 
   *low_index = low;
   *high_index = high;
-  if (low >= sz && high >= sz)
+  if (low >= sz && high < 0)
     return BOTH_SWAP_COMPLETED;
   if (low >= sz)
     return LOW_SWAP_COMPLETED;
@@ -708,16 +702,14 @@ static void store_feature_values_noalign(uint32_t start_index,
   // array to ensure that the alignment requirement is fullfilled.
   // The start_index passed to this function should be an even number so
   // that the 8-byte alignment constraint for MRAM transfer is fullfilled
-  //if (!is_target)
-  //  assert(
-  //      ((uint32_t)(&t_features[FEATURE_INDEX(feature_index) + start_index]) &
-  //       7) == 0);
-  //assert((size_batch * sizeof(feature_t) & 7) == 0);
-
+  if (!is_target)
+    assert(
+        ((uint32_t)(&t_features[FEATURE_INDEX(feature_index) + start_index]) &
+         7) == 0);
+  assert((size_batch * sizeof(feature_t) & 7) == 0);
 
   if (is_target)
-    mram_write(feature_values_in, &t_targets[start_index],
-               size_batch << 2);
+    mram_write(feature_values_in, &t_targets[start_index], size_batch << 2);
   else
     mram_write(feature_values_in,
                &t_features[FEATURE_INDEX(feature_index) + start_index],
@@ -845,7 +837,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     if (load_high) {
       feature_values_commit_high = load_feature_values(
           start_index_high, feature_index, SIZE_BATCH, feature_values3[me()]);
-      high_index = 0;
+      high_index = SIZE_BATCH - 1;
       if (!self)
         feature_values_commit_cmp_high =
             load_feature_values(start_index_high, cmp_feature_index, SIZE_BATCH,
@@ -858,7 +850,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     enum swap_status status = swap_buffers(
         feature_values_commit_low, feature_values_commit_high,
         feature_values_commit_cmp_low, feature_values_commit_cmp_high,
-        SIZE_BATCH, &low_index, &high_index, cmds_array[index_cmd].feature_threshold, &has_swap);
+        SIZE_BATCH, &low_index, &high_index,
+        cmds_array[index_cmd].feature_threshold, &has_swap);
 
     if (status == BOTH_SWAP_COMPLETED) {
 
@@ -921,12 +914,12 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
         // no new buffer
         // paritition the high buffer and write it
-        if(high_index < SIZE_BATCH)
-        pivot = partition_buffer(feature_values_commit_high + high_index,
-                                 feature_values_commit_cmp_high + high_index, 
-                                 SIZE_BATCH - high_index,
-                                 cmds_array[index_cmd].feature_threshold) +
-                start_index_high;
+        if (high_index >= 0)
+          pivot =
+              partition_buffer(feature_values_commit_high,
+                               feature_values_commit_cmp_high, high_index + 1,
+                               cmds_array[index_cmd].feature_threshold) +
+              start_index_high;
         else
           pivot = start_index_high;
 
@@ -952,14 +945,15 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
         // no new buffer
         // paritition the low buffer and write it
-        if(low_index < SIZE_BATCH)
-        pivot = partition_buffer(feature_values_commit_low + low_index,
-                                 feature_values_commit_cmp_low + low_index, 
-                                 SIZE_BATCH - low_index,
-                                 cmds_array[index_cmd].feature_threshold) +
-                start_index_low;
+        if (low_index < SIZE_BATCH)
+          pivot = partition_buffer(feature_values_commit_low + low_index,
+                                   feature_values_commit_cmp_low + low_index,
+                                   SIZE_BATCH - low_index,
+                                   cmds_array[index_cmd].feature_threshold) +
+                  low_index + start_index_low;
         else
-          pivot = SIZE_BATCH + start_index_low;
+          pivot = start_index_low + SIZE_BATCH;
+
         store_feature_values_noalign(start_index_low, feature_index, SIZE_BATCH,
                                      feature_values_commit_low);
         commit_loop = false;
@@ -977,7 +971,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   uint32_t prolog_end = start_index;
   if (prolog_start < prolog_end) {
 #ifdef DEBUG
-    printf("prolog\n");
+    printf("prolog, size %u\n", prolog_end - prolog_start);
 #endif
     feature_t *feature_values_prolog =
         load_feature_values(prolog_start, feature_index,
@@ -1005,7 +999,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       feature_t lower_than_threshold = cmds_array[index_cmd].feature_threshold;
       for (int i = 0; i < prolog_end - prolog_start; ++i) {
         if (HIGHER_THAN(feature_values_prolog_cmp[i],
-            cmds_array[index_cmd].feature_threshold)) {
+                        cmds_array[index_cmd].feature_threshold)) {
           assert(pivot);
           swap(&feature_values_prolog[i],
                &feature_values_pivot[max_n_elems_pivot - (++swap_index)]);
@@ -1047,7 +1041,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   uint32_t epilog_end = leaf_end_index[leaf_index];
   if (epilog_start < epilog_end) {
 #ifdef DEBUG
-    printf("epilog\n");
+    printf("epilog, size %u\n", prolog_end - prolog_start);
 #endif
     feature_t *feature_values_epilog =
         load_feature_values(epilog_start, feature_index,
@@ -1079,7 +1073,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
           cmds_array[index_cmd].feature_threshold + 1;
       for (int i = 0; i < epilog_end - epilog_start; ++i) {
         if (LOWER_EQ_THAN(feature_values_epilog_cmp[i],
-            cmds_array[index_cmd].feature_threshold)) {
+                          cmds_array[index_cmd].feature_threshold)) {
 #ifdef DEBUG
           if (swap_index >= max_n_elems_pivot)
             printf("ERROR swap_index %u max %u\n", swap_index,
@@ -1129,9 +1123,10 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     n_leaves++;
     mutex_unlock(n_leaves_mutex);
 #ifdef DEBUG
-    printf("tid %u index_cmd %u Created 2 leaves: left index %u cnt %u, right "
+    printf("tid %u index_cmd %u Created 2 leaves (n_leaves = %u): left index "
+           "%u cnt %u, right "
            "inex %u cnt %u, parent index %u cnt %u\n",
-           me(), index_cmd, leaf_index,
+           me(), index_cmd, n_leaves, leaf_index,
            leaf_end_index[leaf_index] - leaf_start_index[leaf_index],
            index_new_leaf,
            leaf_end_index[index_new_leaf] - leaf_start_index[index_new_leaf],
@@ -1330,13 +1325,13 @@ int main() {
 
 #if defined(MESURE_PERF) || defined(MESURE_BW)
   barrier_wait(&barrier);
-  if(me() == 0) {
+  if (me() == 0) {
     perfcounter_t end_time = perfcounter_get();
     total_time += end_time;
     printf("Total number of cycles: %lu\n", total_time);
     perfcounter_t evaluate_time = 0, minmax_time = 0, commit_time = 0;
     uint64_t bytes_loaded = 0, bytes_written = 0;
-    for(uint8_t t = 0; t < NR_TASKLETS; ++t) {
+    for (uint8_t t = 0; t < NR_TASKLETS; ++t) {
 #ifdef MESURE_PERF
       evaluate_time += nb_cycles_evaluate[t];
       minmax_time += nb_cycles_minmax[t];
@@ -1349,23 +1344,25 @@ int main() {
 #endif
     }
 #ifdef MESURE_PERF
-    printf("Evaluate number of cycles: %lu %.2f perc.\n", 
-        evaluate_time, (float)evaluate_time / (NR_TASKLETS * total_time));
-    printf("Minmax number of cycles: %lu %.2f perc.\n", 
-        minmax_time, (float)minmax_time / (NR_TASKLETS * total_time));
-    printf("Commit number of cycles: %lu %.2f perc.\n", 
-        commit_time, (float)commit_time / (NR_TASKLETS * total_time));
+    printf("Evaluate number of cycles: %lu %.2f perc.\n", evaluate_time,
+           (float)evaluate_time / (NR_TASKLETS * total_time));
+    printf("Minmax number of cycles: %lu %.2f perc.\n", minmax_time,
+           (float)minmax_time / (NR_TASKLETS * total_time));
+    printf("Commit number of cycles: %lu %.2f perc.\n", commit_time,
+           (float)commit_time / (NR_TASKLETS * total_time));
 #endif
 
 #ifdef MESURE_BW
     printf("Number of bytes loaded from MRAM %lu\n", bytes_loaded);
     printf("Number of bytes written to MRAM %lu\n", bytes_written);
-    printf("Utilized bandwidth %e B/sec\n", (float)(bytes_loaded + bytes_written) * 4.25e8 / total_time);
+    printf("Utilized bandwidth %e B/sec\n",
+           (float)(bytes_loaded + bytes_written) * 4.25e8 / total_time);
 #endif
   }
 #endif
 
 #ifdef TEST
+  barrier_wait(&barrier);
   if (me() == 0) {
     test_check();
   }
