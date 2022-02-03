@@ -84,6 +84,10 @@ if SETUPTOOLS_COMMANDS.intersection(sys.argv):
 else:
     extra_setuptools_args = dict()
 
+if 'extras_require' not in extra_setuptools_args:
+    extra_setuptools_args['extras_require'] = {'test': 'pytest'}
+else:
+    extra_setuptools_args['extras_require'] = extra_setuptools_args['extras_require'] | {'test': 'pytest'}
 
 # Custom clean command to remove build artifacts
 
