@@ -28,7 +28,7 @@
 
 #include "../trees_common.h"
 
-//#define MESURE_PERF
+/*#define MESURE_PERF*/
 //#define MESURE_BW
 #if defined(MESURE_PERF) || defined(MESURE_BW)
 #include <perfcounter.h>
@@ -157,7 +157,16 @@ __dma_aligned feature_t min_max_init[2] = {FLT_MAX, -FLT_MAX};
 /**
  * @brief split commit synchronization
  **/
-MUTEX_INIT(commit_mutex);
+MUTEX_INIT(commit_mutex1);
+MUTEX_INIT(commit_mutex2);
+MUTEX_INIT(commit_mutex3);
+MUTEX_INIT(commit_mutex4);
+mutex_id_t commit_mutex_array[4] = {
+  commit_mutex1,
+  commit_mutex2,
+  commit_mutex3,
+  commit_mutex4
+};
 uint8_t cmd_tasklet_cnt[MAX_NB_LEAF] = {0};
 
 #ifdef MESURE_PERF
@@ -469,7 +478,6 @@ static void do_split_evaluate(uint16_t index_cmd, uint32_t index_batch) {
 
   for (int i = 0; i < size_batch; ++i) {
 
-    /*if (features_val[i] <= cmds_array[index_cmd].feature_threshold) {*/
     if (LOWER_EQ_THAN(features_val[i],
                       cmds_array[index_cmd].feature_threshold)) {
 
@@ -792,7 +800,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
     // if not aligned take mutex
     if (size < SIZE_BATCH)
-      mutex_lock(commit_mutex);
+      mutex_lock(commit_mutex_array[leaf_index & 3]);
 
     feature_values_commit_low = load_feature_values(
         start_index_low, feature_index, size, feature_values[me()]);
@@ -812,7 +820,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                            feature_values[me()]);
 
     if (size < SIZE_BATCH)
-      mutex_unlock(commit_mutex);
+      mutex_unlock(commit_mutex_array[leaf_index & 3]);
 
     commit_loop = false;
   }
@@ -965,7 +973,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   }
 
   // Here we need to handle the prolog and epilog due to alignment constraints
-  mutex_lock(commit_mutex);
+  if(leaf_index)
+    mutex_lock(commit_mutex_array[(leaf_index - 1) & 3]);
   // prolog
   uint32_t prolog_start = leaf_start_index[leaf_index];
   uint32_t prolog_end = start_index;
@@ -1036,6 +1045,12 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
+  if(leaf_index)
+    mutex_unlock(commit_mutex_array[(leaf_index - 1) & 3]);
+
+  if(n_leaves && leaf_index < n_leaves - 1)
+    mutex_lock(commit_mutex_array[leaf_index & 3]);
+
   // epilog
   uint32_t epilog_start = start_index + size;
   uint32_t epilog_end = leaf_end_index[leaf_index];
@@ -1102,7 +1117,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
-  mutex_unlock(commit_mutex);
+  if(n_leaves && leaf_index < n_leaves - 1)
+    mutex_unlock(commit_mutex_array[leaf_index & 3]);
 
   // update leaf indexes
   if (self) {
@@ -1292,10 +1308,10 @@ int main() {
         do_split_commit(index_cmd, index_batch, 0);
 
       bool last = false;
-      mutex_lock(commit_mutex);
+      mutex_lock(commit_mutex_array[leaf_index & 3]);
       if (++cmd_tasklet_cnt[index_cmd] == n_features)
         last = true;
-      mutex_unlock(commit_mutex);
+      mutex_unlock(commit_mutex_array[leaf_index & 3]);
 
       if (last) {
         if (!empty) {
