@@ -31,7 +31,7 @@ print(f"total time for DPUs: {toc - tic} s")
 clf2 = DecisionTreeClassifier(random_state=1, criterion='gini', splitter='random', max_depth=10)
 
 tic = perf_counter()
-clf2.fit(X,y)
+clf2.fit(X, y)
 toc = perf_counter()
 export_graphviz(clf2, out_file="../graphs/tree_cpu.dot")
 y_pred2 = clf2.predict(X)
