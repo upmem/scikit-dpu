@@ -177,7 +177,6 @@ cdef class RandomDpuSplitter(Splitter):
             else:
                 # f_j in the interval [n_known_constants, f_i - n_found_constants[
                 f_j += n_found_constants
-                # f_j in the interval [n_total_constants, f_i[
 
                 current.feature = features[f_j]
                 drew_nonconstant_feature = True
