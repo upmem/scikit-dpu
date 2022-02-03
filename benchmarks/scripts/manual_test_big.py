@@ -1,6 +1,6 @@
 from skdpu.tree._classes import DecisionTreeClassifierDpu
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.tree import export_graphviz
+from sklearn.tree import export_graphviz, export_text
 from sklearn.datasets import make_blobs
 from sklearn.metrics import accuracy_score
 from time import perf_counter
@@ -18,7 +18,10 @@ clf = DecisionTreeClassifierDpu(random_state=1, criterion='gini_dpu', splitter='
 tic = perf_counter()
 clf.fit(X, y)
 toc = perf_counter()
-export_graphviz(clf, out_file="tree_dpu.dot")
+export_graphviz(clf, out_file="../graphs/tree_dpu.dot")
+r = export_text(clf)
+with open('dpu_tree.txt', 'w') as f:
+    f.write(r)
 y_pred = clf.predict(X)
 dpu_accuracy = accuracy_score(y, y_pred)
 
@@ -30,7 +33,7 @@ clf2 = DecisionTreeClassifier(random_state=1, criterion='gini', splitter='random
 tic = perf_counter()
 clf2.fit(X,y)
 toc = perf_counter()
-export_graphviz(clf2, out_file="tree_cpu.dot")
+export_graphviz(clf2, out_file="../graphs/tree_cpu.dot")
 y_pred2 = clf2.predict(X)
 accuracy = accuracy_score(y, y_pred2)
 
