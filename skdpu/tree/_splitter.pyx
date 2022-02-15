@@ -55,7 +55,7 @@ cdef class RandomDpuSplitter(Splitter):
     cdef int init_dpu(self,
                   object X,
                   const DOUBLE_t[:, ::1] y,
-                  const DTYPE_t[:, ::1] y_float,
+                  DTYPE_t[:, ::1] y_float,
                   DOUBLE_t* sample_weight,
                   Params* p) except -1:
         """Initialize the splitter
@@ -116,7 +116,7 @@ cdef class RandomDpuSplitter(Splitter):
         cdef SIZE_t n_features = self.n_features
 
         cdef SIZE_t f_i = record.f_i
-        cdef SIZE_t f_j
+        cdef SIZE_t f_j = -1
 
         cdef SIZE_t max_features = self.max_features
         cdef UINT32_t * random_state = &self.rand_r_state

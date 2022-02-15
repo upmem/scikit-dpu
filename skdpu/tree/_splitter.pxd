@@ -49,13 +49,13 @@ cdef extern from "src/trees.h":
 cdef class RandomDpuSplitter(Splitter):
     cdef SplitRecord best
     cdef SplitRecord current
-    cdef const DTYPE_t[:, :] X
+    cdef DTYPE_t[:, :] X
     cdef SIZE_t n_total_samples
 
     cdef int init_dpu(self,
         object X,
         const DOUBLE_t[:, ::1] y,
-        const DTYPE_t[:, ::1] y_float,
+        DTYPE_t[:, ::1] y_float,
         DOUBLE_t* sample_weight,
         Params * p) except -1
     cdef int draw_feature(self, SetRecord * record) nogil
