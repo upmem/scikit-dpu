@@ -83,7 +83,7 @@ else:
     from sklearn.utils._show_versions import show_versions
 
     __all__ = [
-        "dpu_tree",
+        "tree",
     ]
 
 
