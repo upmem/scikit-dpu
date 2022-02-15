@@ -145,7 +145,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
             print(f"n_samples: {splitter.n_samples}")
 
         cdef Set frontier = Set(INITIAL_STACK_SIZE)
-        cdef SetRecord * record
+        cdef SetRecord * record = NULL
         cdef SetRecord * split_node_left
         cdef SetRecord * split_node_right
         cdef SplitRecord split
