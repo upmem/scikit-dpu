@@ -79,3 +79,6 @@ _configtest.o.d
 
 # notebook checkpoints
 *.ipynb_checkpoints/
+
+# UPMEM SDK
+upmem-*
