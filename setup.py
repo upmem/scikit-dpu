@@ -31,7 +31,6 @@ except ImportError:
 # Python import machinery.
 builtins.__SKDPU_SETUP__ = True
 
-
 DISTNAME = "scikit-dpu"
 DESCRIPTION = "A set of python modules for machine learning for UPMEM DIMM"
 with open("README.rst") as f:
@@ -53,9 +52,7 @@ import skdpu  # noqa
 import sklearn._min_dependencies as min_deps
 from sklearn.externals._packaging.version import parse as parse_version
 
-
 VERSION = skdpu.__version__
-
 
 # For some commands, use setuptools
 SETUPTOOLS_COMMANDS = {
@@ -87,7 +84,8 @@ else:
 if 'extras_require' not in extra_setuptools_args:
     extra_setuptools_args['extras_require'] = {'test': 'pytest'}
 else:
-    extra_setuptools_args['extras_require'] = extra_setuptools_args['extras_require'] | {'test': 'pytest'}
+    extra_setuptools_args['extras_require']['test'] = 'pytest'
+
 
 # Custom clean command to remove build artifacts
 
@@ -107,8 +105,8 @@ class CleanCommand(Clean):
         for dirpath, dirnames, filenames in os.walk("skdpu"):
             for filename in filenames:
                 if any(
-                    filename.endswith(suffix)
-                    for suffix in (".so", ".pyd", ".dll", ".pyc")
+                        filename.endswith(suffix)
+                        for suffix in (".so", ".pyd", ".dll", ".pyc")
                 ):
                     os.unlink(os.path.join(dirpath, filename))
                     continue
@@ -130,6 +128,7 @@ cmdclass = {"clean": CleanCommand, "sdist": sdist}
 # build_ext has to be imported after setuptools
 try:
     from numpy.distutils.command.build_ext import build_ext  # noqa
+
 
     class build_ext_subclass(build_ext):
         def finalize_options(self):
@@ -156,13 +155,13 @@ try:
 
             build_ext.build_extensions(self)
 
+
     cmdclass["build_ext"] = build_ext_subclass
 
 except ImportError:
     # Numpy should not be a dependency just to be able to introspect
     # that python 3.7 is required.
     pass
-
 
 # Optional wheelhouse-uploader features
 # To automate release of binary packages for scikit-learn we need a tool
@@ -173,7 +172,7 @@ except ImportError:
 
 WHEELHOUSE_UPLOADER_COMMANDS = {"fetch_artifacts", "upload_all"}
 if WHEELHOUSE_UPLOADER_COMMANDS.intersection(sys.argv):
-    import wheelhouse_uploader.cmd # type: ignore
+    import wheelhouse_uploader.cmd  # type: ignore
 
     cmdclass.update(vars(wheelhouse_uploader.cmd))
 
@@ -279,14 +278,15 @@ def setup_package():
         ],
         cmdclass=cmdclass,
         python_requires=">=3.7",
-        install_requires=min_deps.tag_to_packages["install"],
+        install_requires=min_deps.tag_to_packages["install"] + ["scikit-learn",
+                                                                "importlib_resources;python_version<'3.9'"],
         package_data={"": ["*.pxd"]},
         **extra_setuptools_args,
     )
 
     commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
     if all(
-        command in ("egg_info", "dist_info", "clean", "check") for command in commands
+            command in ("egg_info", "dist_info", "clean", "check") for command in commands
     ):
         # These actions are required to succeed without Numpy for example when
         # pip is used to install Scikit-learn when Numpy is not yet present in
