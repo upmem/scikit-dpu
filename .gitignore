@@ -82,3 +82,6 @@ _configtest.o.d
 
 # UPMEM SDK
 upmem-*
+
+# vscode dev container
+.devcontainer/
