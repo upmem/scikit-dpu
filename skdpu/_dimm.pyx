@@ -12,17 +12,21 @@ try:
     from importlib.resources import files, as_file
 except ImportError:
     # Try backported to PY<39 `importlib_resources`.
-    from importlib_resources import files, as_file
+    from importlib_resources import files, as_file  # noqa
 
-from ._core import Container
+cdef extern from "src/trees.h":
+    ctypedef struct dpu_set:
+        pass
+    void free_dpus(dpu_set *allset)
 
 _allocated = False  # whether the DPUs have been allocated
+_nr_dpus = 0  # number of DPUs currently allocated
+cdef dpu_set allset
 _kernel = ""  # name of the currently loaded binary
 _data_id = None  # ID of the currently loaded data
 
-_kernels_lib = {"kmeans": files("dpu_kmeans").joinpath("dpu_program/kmeans_dpu_kernel")}
+_kernels_lib = {files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")}
 
-ctr = Container()
 ctr.set_nr_dpus(0)
 
 
@@ -145,7 +149,6 @@ def load_data(data: DIMM_data, tol: float, verbose: int):
 
 
 def free_dpus():
-    global ctr
     if _kernel:
         print("freeing dpus")
         ctr.free_dpus()

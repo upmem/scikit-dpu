@@ -15,11 +15,13 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 
+from .. import _dimm
+
 try:
     from importlib.resources import files, as_file
 except ImportError:
     # Try backported to PY<39 `importlib_resources`.
-    from importlib_resources import files, as_file
+    from importlib_resources import files, as_file  # noqa
 
 from sklearn.tree._utils cimport log
 from sklearn.tree._utils cimport rand_int
@@ -81,21 +83,37 @@ cdef class RandomDpuSplitter(Splitter):
 
         IF CYTHON_DEBUG == 1:
             print("allocating dpus")
-        allocate(p)
+        if not _dimm._allocated:
+            allocate(p)
+            _dimm.allset = p.allset
+        elif _dimm._nr_dpus != p.ndpu:
+            # TODO: keep the dpu_set struct alive somewhere between runs
+            # TODO: sort what should be kept in p and what should be kept in _dimm
+            p.allset = _dimm.allset
+            free_dpus(&p.allset)
+            allocate(p)
+            _dimm.allset = p.allset
+        else:
+            p.allset = _dimm.allset
+            p.ndpu = _dimm._nr_dpus
         p.npointperdpu = p.npoints // p.ndpu
+
         IF CYTHON_DEBUG == 1:
             print("loading kernel")
         kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
         with as_file(kernel_bin) as DPU_BINARY:
             load_kernel(p, bytes(DPU_BINARY))
+
         IF CYTHON_DEBUG == 1:
             print("building jagged array")
         features = build_jagged_array(p, &self.X[0,0])
         # TODO: free the pointer array at some point
+
         IF CYTHON_DEBUG == 1:
             print("populating dpu")
         with nogil:
             populateDpu(p, features, &y_float[0,0])
+
         IF CYTHON_DEBUG == 1:
             print("finished init_dpu")
 

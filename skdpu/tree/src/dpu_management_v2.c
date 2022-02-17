@@ -23,8 +23,15 @@ void allocate(Params *p) {
   if (p->ndpu == 0) {
     DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, NULL, &(p->allset)));
     DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
-  } else
+  } else {
+    uint32_t asked_ndpu = p->ndpu;
     DPU_ASSERT(dpu_alloc(p->ndpu, NULL, &(p->allset)));
+    DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
+    if(asked_ndpu > p->ndpu) {
+        printf("You asked for %lu DPUs but only %lu are available on this machine.\n", asked_ndpu, p->ndpu);
+        exit(-1);
+    }
+  }
 }
 
 /**
@@ -32,13 +39,13 @@ void allocate(Params *p) {
  *
  * @param p Algorithm parameters.
  */
-void free_dpus(Params *p) {
+void free_dpus(dpu_set *allset) {
 
-  assert(p);
+  assert(allset);
 #ifdef DEBUG
   printf("freeing DPUs\n");
 #endif
-  DPU_ASSERT(dpu_free(p->allset));
+  DPU_ASSERT(dpu_free(*allset));
 }
 
 /**

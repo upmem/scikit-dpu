@@ -126,7 +126,7 @@ struct CommandResults {
 /** @name dpu_management.c */
 /**@{*/
 void allocate(Params *p);
-void free_dpus(Params *p);
+void free_dpus(dpu_set *allset);
 void load_kernel(Params *p, const char *DPU_BINARY);
 feature_t ** build_jagged_array(Params *p, feature_t *features_flat);
 /**
