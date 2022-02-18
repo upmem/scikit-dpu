@@ -5,7 +5,7 @@ from sklearn.datasets import make_classification
 from sklearn.metrics import accuracy_score
 
 
-def test_consistency():
+def test_validity():
     n_dpu = 50
     n_points_per_dpu = 2000
     n_features = 16

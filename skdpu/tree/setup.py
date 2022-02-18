@@ -48,6 +48,14 @@ def configuration(parent_package="", top_path=None):
     #     define_macros=[("NB_CLUSTERS", "12")],
     # )
     config.add_extension(
+        "_dimm",
+        sources=["_dimm.pyx", "src/dpu_management_v2.c"],
+        include_dirs=[numpy.get_include()] + dpu_pkg_config_include,
+        libraries=libraries + dpu_pkg_config_libs,
+        library_dirs=dpu_pkg_config_lib_dirs,
+        extra_compile_args=extra_compile_args,
+    )
+    config.add_extension(
         "_tree",
         sources=["_tree.pyx", "src/dpu_management_v2.c"],
         include_dirs=[numpy.get_include()] + dpu_pkg_config_include,

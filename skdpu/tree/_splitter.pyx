@@ -2,20 +2,17 @@
 #
 # License: MIT
 
-from sklearn.tree._criterion cimport Criterion
 from sklearn.tree._splitter cimport Splitter
 
-from libc.stdlib cimport free
-from libc.stdlib cimport qsort
 from libc.string cimport memcpy
-from libc.string cimport memset
 from libc.stdio cimport printf
 
 import numpy as np
 cimport numpy as np
 np.import_array()
 
-from .. import _dimm
+from . cimport _dimm
+from . import _dimm
 
 try:
     from importlib.resources import files, as_file
@@ -23,15 +20,12 @@ except ImportError:
     # Try backported to PY<39 `importlib_resources`.
     from importlib_resources import files, as_file  # noqa
 
-from sklearn.tree._utils cimport log
 from sklearn.tree._utils cimport rand_int
 from sklearn.tree._utils cimport rand_uniform
-from sklearn.tree._utils cimport RAND_R_MAX
-from ._utils cimport safe_realloc
 
 cdef extern from "src/trees.h" nogil:
     void allocate(Params *p)
-    void free_dpus(Params *p)
+    void free_dpus(dpu_set allset)
     void load_kernel(Params *p, const char *DPU_BINARY)
     DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
     void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
@@ -77,42 +71,58 @@ cdef class RandomDpuSplitter(Splitter):
         p.nfeatures = self.n_features
         p.nclasses = (<GiniDpu>self.criterion).n_classes[0]
 
-        IF CYTHON_DEBUG == 1:
-            print("allocating X")
-        self.X = X
-
-        IF CYTHON_DEBUG == 1:
-            print("allocating dpus")
         if not _dimm._allocated:
+            IF CYTHON_DEBUG == 1:
+                print("allocating dpus")
+            _dimm._requested_dpus = p.ndpu
             allocate(p)
             _dimm.allset = p.allset
-        elif _dimm._nr_dpus != p.ndpu:
+            _dimm._allocated = True
+            _dimm._nr_dpus = p.ndpu
+        elif _dimm._requested_dpus != p.ndpu:
             # TODO: keep the dpu_set struct alive somewhere between runs
             # TODO: sort what should be kept in p and what should be kept in _dimm
-            p.allset = _dimm.allset
-            free_dpus(&p.allset)
+            IF CYTHON_DEBUG == 1:
+                print("reallocating dpus")
+            _dimm._requested_dpus = p.ndpu
+            free_dpus(_dimm.allset)
+            _dimm._data_id=None
+            _dimm._kernel= ""
             allocate(p)
             _dimm.allset = p.allset
+            _dimm._nr_dpus = p.ndpu
         else:
+            IF CYTHON_DEBUG == 1:
+                print("dpus are already allocated")
             p.allset = _dimm.allset
             p.ndpu = _dimm._nr_dpus
         p.npointperdpu = p.npoints // p.ndpu
 
-        IF CYTHON_DEBUG == 1:
-            print("loading kernel")
-        kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
-        with as_file(kernel_bin) as DPU_BINARY:
-            load_kernel(p, bytes(DPU_BINARY))
+        if _dimm._kernel != "tree":
+            IF CYTHON_DEBUG == 1:
+                print("loading kernel")
+            kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
+            with as_file(kernel_bin) as DPU_BINARY:
+                load_kernel(p, bytes(DPU_BINARY))
+            _dimm._kernel = "tree"
 
-        IF CYTHON_DEBUG == 1:
-            print("building jagged array")
-        features = build_jagged_array(p, &self.X[0,0])
-        # TODO: free the pointer array at some point
+        data_id = id(X)
+        if _dimm._data_id != data_id:
+            IF CYTHON_DEBUG == 1:
+                print("allocating X")
+            self.X = X
 
-        IF CYTHON_DEBUG == 1:
-            print("populating dpu")
-        with nogil:
-            populateDpu(p, features, &y_float[0,0])
+            IF CYTHON_DEBUG == 1:
+                print("building jagged array")
+            features = build_jagged_array(p, &self.X[0,0])
+            # TODO: free the pointer array at some point
+
+            IF CYTHON_DEBUG == 1:
+                print("populating dpu")
+            with nogil:
+                populateDpu(p, features, &y_float[0,0])
+
+            _dimm._data_id = data_id
 
         IF CYTHON_DEBUG == 1:
             print("finished init_dpu")

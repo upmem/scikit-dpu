@@ -34,8 +34,6 @@ from ._tree import DpuTreeBuilder
 import numpy as np
 from scipy.sparse import issparse
 
-from .. import _dimm
-
 __all__ = [
     "DecisionTreeClassifierDpu",
 ]
