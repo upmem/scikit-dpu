@@ -2,6 +2,7 @@
 from skdpu.tree import DecisionTreeClassifierDpu
 from sklearn.tree import export_text
 from sklearn.datasets import make_classification
+import sys
 
 
 def test_consistency_new_classifier():
@@ -36,30 +37,34 @@ def test_consistency_new_classifier():
 
     assert r1 == r2
 
+
 def test_consistency_same_classifier():
-    n_dpu = 50
-    n_points_per_dpu = 2000
-    n_features = 16
+    # not running this test on python <= 3.8 because random_state doesn't reset properly between calls of "fit"
+    if (sys.version_info.major, sys.version_info.minor) >= (3, 9):
+        n_dpu = 50
+        n_points_per_dpu = 2000
+        n_features = 16
 
-    X, y = make_classification(n_samples=n_dpu * n_points_per_dpu,
-                               n_features=n_features,
-                               n_informative=4,
-                               n_classes=3,
-                               random_state=0)
+        X, y = make_classification(n_samples=n_dpu * n_points_per_dpu,
+                                   n_features=n_features,
+                                   n_informative=4,
+                                   n_classes=3,
+                                   random_state=0)
 
-    clf1 = DecisionTreeClassifierDpu(random_state=1,
-                                     criterion='gini_dpu',
-                                     splitter='random_dpu',
-                                     ndpu=n_dpu,
-                                     max_depth=10)
+        clf1 = DecisionTreeClassifierDpu(random_state=1,
+                                         criterion='gini_dpu',
+                                         splitter='random_dpu',
+                                         ndpu=n_dpu,
+                                         max_depth=10)
 
-    clf1.fit(X, y)
-    r1 = export_text(clf1)
+        clf1.fit(X, y)
+        r1 = export_text(clf1)
 
-    clf1.fit(X, y)
-    r2 = export_text(clf1)
+        clf1.fit(X, y)
+        r2 = export_text(clf1)
 
-    assert r1 == r2
+        assert r1 == r2
+
 
 def test_consistency_new_array():
     n_dpu = 50
