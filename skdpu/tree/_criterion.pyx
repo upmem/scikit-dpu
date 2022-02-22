@@ -20,7 +20,7 @@ from ._utils cimport safe_realloc
 from sklearn.tree._utils cimport sizet_ptr_to_ndarray
 from sklearn.tree._utils cimport WeightedMedianCalculator
 
-DEF CYTHON_DEBUG = 0
+DEF CYTHON_DEBUG = 1
 
 cdef class ClassificationCriterionDpu(Criterion):
     """Abstract criterion for classification."""
@@ -375,7 +375,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         impurity_right : double pointer
             The memory address to save the impurity of the right node to
         """
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    evaluating children impurity\n") # DEBUG
         cdef SIZE_t* n_classes = self.n_classes
         cdef double* sum_left = self.sum_left
@@ -410,7 +410,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
 
         impurity_left[0] = gini_left / self.n_outputs
         impurity_right[0] = gini_right / self.n_outputs
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    impurity_left %f\n", impurity_left[0])
             printf("    impurity_right %f\n", impurity_right[0])
 
@@ -436,7 +436,7 @@ cdef class GiniDpu(ClassificationCriterionDpu):
         IF CYTHON_DEBUG == 1:
             printf("    n_node_samples = %lu\n", n_node_samples) #DEBUG
         IF CYTHON_DEBUG == 1:
-            printf("    leaf index : %ld\n", eval_index)
+            printf("    eval index : %ld\n", eval_index)
 
         weighted_n_left[0] = 0
         n_left[0] = 0

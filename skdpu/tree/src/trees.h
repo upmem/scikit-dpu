@@ -127,6 +127,7 @@ struct CommandResults {
 /**@{*/
 void allocate(Params *p);
 void free_dpus(dpu_set allset);
+void reset_kernel(Params *p);
 void load_kernel(Params *p, const char *DPU_BINARY);
 feature_t ** build_jagged_array(Params *p, feature_t *features_flat);
 /**

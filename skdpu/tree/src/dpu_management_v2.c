@@ -63,6 +63,26 @@ void load_kernel(Params *p, const char *DPU_BINARY) {
   DPU_ASSERT(dpu_load(p->allset, DPU_BINARY, NULL));
 }
 
+/**
+ * @brief Resets the DPU states for a new run.
+ * 
+ * @param p Algorithm parameters.
+ */
+void reset_kernel(Params *p) {
+  uint32_t nleaves = 1;
+  uint32_t leaf_start_index = 0;
+  uint32_t first_iteration = true;
+  DPU_ASSERT(dpu_broadcast_to(p->allset, "n_leaves", 0, &nleaves,
+                              sizeof(uint32_t), DPU_XFER_ASYNC));
+  DPU_ASSERT(dpu_broadcast_to(p->allset, "leaf_start_index", 0,
+                              &leaf_start_index, sizeof(uint32_t),
+                              DPU_XFER_ASYNC));
+  DPU_ASSERT(dpu_broadcast_to(p->allset, "first_iteration", 0,
+                              &first_iteration, sizeof(uint32_t),
+                              DPU_XFER_ASYNC));
+  DPU_ASSERT(dpu_sync(p->allset));
+}
+
 struct callback_args {
 
   feature_t **points;
@@ -396,4 +416,7 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
     DPU_ASSERT(dpu_log_read(dpu, stdout));
   }
 #endif
+  DPU_FOREACH(p->allset, dpu, each_dpu) {
+    DPU_ASSERT(dpu_log_read(dpu, stdout));
+  }
 }

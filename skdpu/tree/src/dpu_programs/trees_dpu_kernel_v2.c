@@ -42,6 +42,8 @@
 __host size_t n_points;
 __host size_t n_features;
 __host size_t n_classes;
+__host uint32_t first_iteration=true;
+bool got_commit = false;
 /**@}*/
 
 /**
@@ -161,6 +163,7 @@ MUTEX_INIT(commit_mutex1);
 MUTEX_INIT(commit_mutex2);
 MUTEX_INIT(commit_mutex3);
 MUTEX_INIT(commit_mutex4);
+MUTEX_INIT(commit_mutex_global);
 mutex_id_t commit_mutex_array[4] = {
   commit_mutex1,
   commit_mutex2,
@@ -800,7 +803,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
     // if not aligned take mutex
     if (size < SIZE_BATCH)
-      mutex_lock(commit_mutex_array[leaf_index & 3]);
+      mutex_lock(commit_mutex_global);
 
     feature_values_commit_low = load_feature_values(
         start_index_low, feature_index, size, feature_values[me()]);
@@ -820,8 +823,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                            feature_values[me()]);
 
     if (size < SIZE_BATCH)
-      mutex_unlock(commit_mutex_array[leaf_index & 3]);
-
+      mutex_unlock(commit_mutex_global);
     commit_loop = false;
   }
 
@@ -974,7 +976,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
   // Here we need to handle the prolog and epilog due to alignment constraints
   if(leaf_index)
-    mutex_lock(commit_mutex_array[(leaf_index - 1) & 3]);
+    mutex_lock(commit_mutex_global);
   // prolog
   uint32_t prolog_start = leaf_start_index[leaf_index];
   uint32_t prolog_end = start_index;
@@ -1046,10 +1048,10 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                            feature_values3[me()]);
   }
   if(leaf_index)
-    mutex_unlock(commit_mutex_array[(leaf_index - 1) & 3]);
+    mutex_unlock(commit_mutex_global);
 
   if(n_leaves && leaf_index < n_leaves - 1)
-    mutex_lock(commit_mutex_array[leaf_index & 3]);
+    mutex_lock(commit_mutex_global);
 
   // epilog
   uint32_t epilog_start = start_index + size;
@@ -1118,7 +1120,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                            feature_values3[me()]);
   }
   if(n_leaves && leaf_index < n_leaves - 1)
-    mutex_unlock(commit_mutex_array[leaf_index & 3]);
+    mutex_unlock(commit_mutex_global);
 
   // update leaf indexes
   if (self) {
@@ -1268,6 +1270,10 @@ int main() {
 
   // initialization
   if (me() == 0) {
+    got_commit = false;
+    if(first_iteration) {
+      leaf_end_index[0] = n_points;
+    }
     batch_cnt = 0;
     cmd_cnt = 0;
     n_points_8align = ((n_points + 1) >> 1) << 1;
@@ -1283,6 +1289,14 @@ int main() {
 #if defined(MESURE_PERF) || defined(MESURE_BW)
     perfcounter_config(COUNT_CYCLES, true);
 #endif
+    if(first_iteration) {
+      first_iteration = false;
+      printf("features 2:\n");
+      for(uint32_t i = 0; i < n_points; i++) {
+        printf("%f ",t_features[FEATURE_INDEX(2)+i]);
+      }
+      printf("\n");
+    }
   }
   barrier_wait(&barrier);
 
@@ -1308,10 +1322,10 @@ int main() {
         do_split_commit(index_cmd, index_batch, 0);
 
       bool last = false;
-      mutex_lock(commit_mutex_array[leaf_index & 3]);
+      mutex_lock(commit_mutex_global);
       if (++cmd_tasklet_cnt[index_cmd] == n_features)
         last = true;
-      mutex_unlock(commit_mutex_array[leaf_index & 3]);
+      mutex_unlock(commit_mutex_global);
 
       if (last) {
         if (!empty) {
@@ -1325,6 +1339,8 @@ int main() {
           do_empty_commit(index_cmd, get_new_leaf_index(index_cmd));
         }
       }
+
+      got_commit = true;
 
     } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
 
@@ -1384,6 +1400,23 @@ int main() {
   }
   barrier_wait(&barrier);
 #endif
+
+barrier_wait(&barrier);
+if (me() == 0) {
+  printf("leaves:\n");
+  for (uint32_t i = 0; i < n_leaves; i++) {
+    printf("[%u, %u] ", leaf_start_index[i], leaf_end_index[i]);
+  }
+  printf("\n");
+
+  if(got_commit) {
+    printf("features 2:\n");
+    for(uint32_t i = 0; i < n_points; i++) {
+      printf("%f ",t_features[FEATURE_INDEX(2)+i]);
+    }
+    printf("\n");
+  }
+}
 
 #ifdef DEBUG
   if (me() == 0) {
