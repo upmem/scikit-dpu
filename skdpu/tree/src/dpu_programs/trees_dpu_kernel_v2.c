@@ -677,7 +677,11 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint32_t start_index = leaf_start_index[leaf_index];
   uint32_t end_index = leaf_end_index[leaf_index];
-  *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
+  // garuantee there is always a prolog (except for leftmost leaf)
+  if(start_index)
+    *index = (ALIGN_8_HIGH((start_index + 1) * sizeof(feature_t)) / sizeof(feature_t));
+  else
+    *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
 
   // handle the case where *index > end_index
   if (*index >= end_index) {
@@ -1050,8 +1054,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   if(leaf_index)
     mutex_unlock(commit_mutex_global);
 
-  if(n_leaves && leaf_index < n_leaves - 1)
-    mutex_lock(commit_mutex_global);
+  // TODO : restore this check once we have a leaf adjacency array
+  // if(n_leaves && leaf_index < n_leaves - 1)
+  mutex_lock(commit_mutex_global);
 
   // epilog
   uint32_t epilog_start = start_index + size;
@@ -1119,8 +1124,9 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
-  if(n_leaves && leaf_index < n_leaves - 1)
-    mutex_unlock(commit_mutex_global);
+  // TODO : restore this check once we have a leaf adjacency array
+  // if(n_leaves && leaf_index < n_leaves - 1)
+  mutex_unlock(commit_mutex_global);
 
   // update leaf indexes
   if (self) {
@@ -1291,9 +1297,9 @@ int main() {
 #endif
     if(first_iteration) {
       first_iteration = false;
-      printf("features 2:\n");
+      printf("features 1:\n");
       for(uint32_t i = 0; i < n_points; i++) {
-        printf("%f ",t_features[FEATURE_INDEX(2)+i]);
+        printf("%f ",t_features[FEATURE_INDEX(1)+i]);
       }
       printf("\n");
     }
@@ -1410,9 +1416,11 @@ if (me() == 0) {
   printf("\n");
 
   if(got_commit) {
-    printf("features 2:\n");
+    // printf("feature 1:\n");
+    printf("targets:\n");
     for(uint32_t i = 0; i < n_points; i++) {
-      printf("%f ",t_features[FEATURE_INDEX(2)+i]);
+      // printf("%f ",t_features[FEATURE_INDEX(1)+i]);
+      printf("%f ",t_targets[i]);
     }
     printf("\n");
   }
