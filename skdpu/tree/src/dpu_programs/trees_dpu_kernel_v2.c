@@ -679,7 +679,7 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   uint32_t end_index = leaf_end_index[leaf_index];
   // garuantee there is always a prolog (except for leftmost leaf)
   if(start_index)
-    *index = (ALIGN_8_HIGH((start_index + 1) * sizeof(feature_t)) / sizeof(feature_t));
+    *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t) + 8) / sizeof(feature_t));
   else
     *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
 
@@ -1302,6 +1302,11 @@ int main() {
         printf("%f ",t_features[FEATURE_INDEX(1)+i]);
       }
       printf("\n");
+      printf("targets:\n");
+      for(uint32_t i = 0; i < n_points; i++) {
+        printf("%f ",t_targets[i]);
+      }
+      printf("\n");
     }
   }
   barrier_wait(&barrier);
@@ -1416,10 +1421,13 @@ if (me() == 0) {
   printf("\n");
 
   if(got_commit) {
-    // printf("feature 1:\n");
+    printf("feature 1:\n");
+    for(uint32_t i = 0; i < n_points; i++) {
+      printf("%f ",t_features[FEATURE_INDEX(1)+i]);
+    }
+    printf("\n");
     printf("targets:\n");
     for(uint32_t i = 0; i < n_points; i++) {
-      // printf("%f ",t_features[FEATURE_INDEX(1)+i]);
       printf("%f ",t_targets[i]);
     }
     printf("\n");

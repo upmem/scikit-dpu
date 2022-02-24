@@ -1,0 +1,1 @@
+rm out.log diff.log xaa xab && python tree1.py >out.log && split -l 482 out.log && diff xaa xab > diff.log
