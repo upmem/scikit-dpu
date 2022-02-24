@@ -229,8 +229,10 @@ static bool get_next_command(uint16_t *index_cmd, uint32_t *index_batch) {
     *index_batch = 0;
     // specific case where the split feature is feature 0
     // directly skip it
-    if (cmds_array[cmd_cnt].feature_index == 0)
+    if (cmds_array[cmd_cnt].feature_index == 0) {
       *index_batch = 1;
+      batch_cnt++;
+    }
   }
   return true;
 }
@@ -683,8 +685,11 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   else
     *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
 
+  // TODO: add check for last leaf
+  int32_t end_index_align = (ALIGN_8_LOW(end_index * sizeof(feature_t) - 8)  / sizeof(feature_t));
+
   // handle the case where *index > end_index
-  if (*index >= end_index) {
+  if (*index >= end_index_align) {
     // in this case we treat the leaf at once
     // No prolog/epilog but the partitioning will be protected
     // by mutex
@@ -692,12 +697,13 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
     *size = end_index - start_index;
     return;
   }
-  uint32_t nb_buffers = (end_index - *index) / SIZE_BATCH;
+  // uint32_t nb_buffers = (end_index - *index) / SIZE_BATCH;
+  uint32_t nb_buffers = (end_index_align - *index) / SIZE_BATCH;
   if (nb_buffers)
     *size = nb_buffers * SIZE_BATCH;
   else {
     // case where the size is less than one buffer
-    *size = end_index - *index;
+    *size = end_index_align - *index;
   }
 }
 
@@ -806,8 +812,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     assert(size <= SIZE_BATCH);
 
     // if not aligned take mutex
-    if (size < SIZE_BATCH)
-      mutex_lock(commit_mutex_global);
+    // if (size < SIZE_BATCH)
+    mutex_lock(commit_mutex_global);
 
     feature_values_commit_low = load_feature_values(
         start_index_low, feature_index, size, feature_values[me()]);
@@ -826,14 +832,15 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(start_index_low, feature_index, size,
                            feature_values[me()]);
 
-    if (size < SIZE_BATCH)
-      mutex_unlock(commit_mutex_global);
+    // if (size < SIZE_BATCH)
+    mutex_unlock(commit_mutex_global);
     commit_loop = false;
   }
 
   bool load_low = true, load_high = true;
   uint16_t low_index = 0, high_index = 0;
   while (commit_loop) {
+    mutex_lock(commit_mutex_global);
 
     // load buffers for the feature we want to handle the swap for
     // and load buffers of the split feature, used for the comparisons
@@ -976,11 +983,12 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
         load_high = true;
       }
     }
+    mutex_unlock(commit_mutex_global);
   }
 
   // Here we need to handle the prolog and epilog due to alignment constraints
-  if(leaf_index)
-    mutex_lock(commit_mutex_global);
+  // if(leaf_index)
+  mutex_lock(commit_mutex_global);
   // prolog
   uint32_t prolog_start = leaf_start_index[leaf_index];
   uint32_t prolog_end = start_index;
@@ -1051,8 +1059,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
-  if(leaf_index)
-    mutex_unlock(commit_mutex_global);
+  // if(leaf_index)
+  mutex_unlock(commit_mutex_global);
 
   // TODO : restore this check once we have a leaf adjacency array
   // if(n_leaves && leaf_index < n_leaves - 1)
@@ -1139,11 +1147,11 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
         leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 #endif
     assert(index_new_leaf < MAX_NB_LEAF);
+    mutex_lock(n_leaves_mutex);
     uint32_t index_tmp = leaf_end_index[leaf_index];
     leaf_end_index[leaf_index] = pivot;
     leaf_start_index[index_new_leaf] = pivot;
     leaf_end_index[index_new_leaf] = index_tmp;
-    mutex_lock(n_leaves_mutex);
     n_leaves++;
     mutex_unlock(n_leaves_mutex);
 #ifdef DEBUG
