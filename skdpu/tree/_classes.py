@@ -335,8 +335,6 @@ class DecisionTreeClassifierDpu(DecisionTreeClassifier):
             self.ndpu
         )
 
-        # TODO: make X and y immutable (if ndarrays)
-
         builder.build(self.tree_, X, y, sample_weight)
 
         if self.n_outputs_ == 1 and is_classifier(self):

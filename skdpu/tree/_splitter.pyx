@@ -31,7 +31,7 @@ cdef extern from "src/trees.h" nogil:
     DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
     void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
 
-DEF CYTHON_DEBUG = 1
+DEF CYTHON_DEBUG = 0
 
 cdef double INFINITY = np.inf
 
@@ -254,7 +254,7 @@ cdef class RandomDpuSplitter(Splitter):
         cdef SIZE_t * features = record.features
         cdef SIZE_t i
 
-        IF CYTHON_DEBUG >= 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    Drawing threshold for leaf %ld and feature %ld\n", record.leaf_index, record.current.feature)
 
         min_feature_value = INFINITY
@@ -263,7 +263,7 @@ cdef class RandomDpuSplitter(Splitter):
             min_feature_value = min(min_feature_value, res[i].min_max[2 * minmax_index])
             max_feature_value = max(max_feature_value, res[i].min_max[2 * minmax_index + 1])
 
-        IF CYTHON_DEBUG >= 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    min: %f, max: %f\n", min_feature_value, max_feature_value)
 
         if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
@@ -284,7 +284,7 @@ cdef class RandomDpuSplitter(Splitter):
             if record.current.threshold == max_feature_value:
                 record.current.threshold = min_feature_value
 
-            IF CYTHON_DEBUG >= 1:
+            IF CYTHON_DEBUG >= 2:
                 printf("    drew %f\n", record.current.threshold)
 
         return 0

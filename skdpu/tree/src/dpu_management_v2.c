@@ -416,7 +416,4 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
     DPU_ASSERT(dpu_log_read(dpu, stdout));
   }
 #endif
-  DPU_FOREACH(p->allset, dpu, each_dpu) {
-    DPU_ASSERT(dpu_log_read(dpu, stdout));
-  }
 }

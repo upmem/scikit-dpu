@@ -279,7 +279,8 @@ def setup_package():
         cmdclass=cmdclass,
         python_requires=">=3.7",
         install_requires=min_deps.tag_to_packages["install"] + ["scikit-learn",
-                                                                "importlib_resources;python_version<'3.9'"],
+                                                                "importlib_resources;python_version<'3.9'",
+                                                                "xxhash"],
         package_data={"": ["*.pxd"]},
         **extra_setuptools_args,
     )

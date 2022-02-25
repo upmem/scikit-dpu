@@ -43,7 +43,6 @@ __host size_t n_points;
 __host size_t n_features;
 __host size_t n_classes;
 __host uint32_t first_iteration=true;
-bool got_commit = false;
 /**@}*/
 
 /**
@@ -1284,9 +1283,9 @@ int main() {
 
   // initialization
   if (me() == 0) {
-    got_commit = false;
     if(first_iteration) {
       leaf_end_index[0] = n_points;
+      first_iteration = false;
     }
     batch_cnt = 0;
     cmd_cnt = 0;
@@ -1303,19 +1302,6 @@ int main() {
 #if defined(MESURE_PERF) || defined(MESURE_BW)
     perfcounter_config(COUNT_CYCLES, true);
 #endif
-    if(first_iteration) {
-      first_iteration = false;
-      printf("features 1:\n");
-      for(uint32_t i = 0; i < n_points; i++) {
-        printf("%f ",t_features[FEATURE_INDEX(1)+i]);
-      }
-      printf("\n");
-      printf("targets:\n");
-      for(uint32_t i = 0; i < n_points; i++) {
-        printf("%f ",t_targets[i]);
-      }
-      printf("\n");
-    }
   }
   barrier_wait(&barrier);
 
@@ -1358,8 +1344,6 @@ int main() {
           do_empty_commit(index_cmd, get_new_leaf_index(index_cmd));
         }
       }
-
-      got_commit = true;
 
     } else if (cmds_array[index_cmd].type == SPLIT_MINMAX) {
 
@@ -1419,28 +1403,6 @@ int main() {
   }
   barrier_wait(&barrier);
 #endif
-
-barrier_wait(&barrier);
-if (me() == 0) {
-  printf("leaves:\n");
-  for (uint32_t i = 0; i < n_leaves; i++) {
-    printf("[%u, %u] ", leaf_start_index[i], leaf_end_index[i]);
-  }
-  printf("\n");
-
-  if(got_commit) {
-    printf("feature 1:\n");
-    for(uint32_t i = 0; i < n_points; i++) {
-      printf("%f ",t_features[FEATURE_INDEX(1)+i]);
-    }
-    printf("\n");
-    printf("targets:\n");
-    for(uint32_t i = 0; i < n_points; i++) {
-      printf("%f ",t_targets[i]);
-    }
-    printf("\n");
-  }
-}
 
 #ifdef DEBUG
   if (me() == 0) {
