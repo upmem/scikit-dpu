@@ -1,35 +1,32 @@
 # Authors: Sylvan Brocard
 #
 # License: MIT
-
-from sklearn.tree._criterion cimport Criterion
+import xxhash
 from sklearn.tree._splitter cimport Splitter
 
-from libc.stdlib cimport free
-from libc.stdlib cimport qsort
 from libc.string cimport memcpy
-from libc.string cimport memset
 from libc.stdio cimport printf
 
 import numpy as np
 cimport numpy as np
 np.import_array()
 
+from . cimport _dimm
+from . import _dimm
+
 try:
     from importlib.resources import files, as_file
 except ImportError:
     # Try backported to PY<39 `importlib_resources`.
-    from importlib_resources import files, as_file
+    from importlib_resources import files, as_file  # noqa
 
-from sklearn.tree._utils cimport log
 from sklearn.tree._utils cimport rand_int
 from sklearn.tree._utils cimport rand_uniform
-from sklearn.tree._utils cimport RAND_R_MAX
-from ._utils cimport safe_realloc
 
 cdef extern from "src/trees.h" nogil:
     void allocate(Params *p)
-    void free_dpus(Params *p)
+    void free_dpus(dpu_set allset)
+    void reset_kernel(Params *p)
     void load_kernel(Params *p, const char *DPU_BINARY)
     DTYPE_t ** build_jagged_array(Params *p, DTYPE_t * features_flat)
     void populateDpu(Params *p, DTYPE_t **features, DTYPE_t *targets)
@@ -66,37 +63,76 @@ cdef class RandomDpuSplitter(Splitter):
         cdef DTYPE_t ** features = NULL
 
         # Call parent init
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 1:
             print("initializing base splitter")
         Splitter.init(self, X, y, sample_weight)
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 1:
             print("updating parameters")
         p.npoints = self.n_samples
         p.nfeatures = self.n_features
         p.nclasses = (<GiniDpu>self.criterion).n_classes[0]
 
-        IF CYTHON_DEBUG == 1:
-            print("allocating X")
-        self.X = X
-
-        IF CYTHON_DEBUG == 1:
-            print("allocating dpus")
-        allocate(p)
+        if not _dimm._allocated:
+            IF CYTHON_DEBUG >= 1:
+                print("allocating dpus")
+            _dimm._requested_dpus = p.ndpu
+            allocate(p)
+            _dimm.allset = p.allset
+            _dimm._allocated = True
+            _dimm._nr_dpus = p.ndpu
+        elif _dimm._requested_dpus != p.ndpu:
+            # TODO: keep the dpu_set struct alive somewhere between runs
+            # TODO: sort what should be kept in p and what should be kept in _dimm
+            IF CYTHON_DEBUG >= 1:
+                print("reallocating dpus")
+            _dimm._requested_dpus = p.ndpu
+            free_dpus(_dimm.allset)
+            _dimm._data_id=None
+            _dimm._kernel= ""
+            allocate(p)
+            _dimm.allset = p.allset
+            _dimm._nr_dpus = p.ndpu
+        else:
+            IF CYTHON_DEBUG >= 1:
+                print("dpus are already allocated")
+            p.allset = _dimm.allset
+            p.ndpu = _dimm._nr_dpus
         p.npointperdpu = p.npoints // p.ndpu
-        IF CYTHON_DEBUG == 1:
-            print("loading kernel")
-        kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
-        with as_file(kernel_bin) as DPU_BINARY:
-            load_kernel(p, bytes(DPU_BINARY))
-        IF CYTHON_DEBUG == 1:
-            print("building jagged array")
-        features = build_jagged_array(p, &self.X[0,0])
-        # TODO: free the pointer array at some point
-        IF CYTHON_DEBUG == 1:
-            print("populating dpu")
-        with nogil:
-            populateDpu(p, features, &y_float[0,0])
-        IF CYTHON_DEBUG == 1:
+
+        if _dimm._kernel != "tree":
+            IF CYTHON_DEBUG >= 1:
+                print("loading kernel")
+            kernel_bin = files("skdpu").joinpath("tree/src/dpu_programs/trees_dpu_kernel_v2")
+            with as_file(kernel_bin) as DPU_BINARY:
+                load_kernel(p, bytes(DPU_BINARY))
+            _dimm._kernel = "tree"
+            _dimm._data_id = None
+
+        h = xxhash.xxh3_64()  # data_id = id(X)
+        h.update(X)
+        data_id = h.digest()
+        if _dimm._data_id != data_id:
+            IF CYTHON_DEBUG >= 1:
+                print("allocating X")
+            self.X = X
+
+            IF CYTHON_DEBUG >= 1:
+                print("building jagged array")
+            features = build_jagged_array(p, &self.X[0,0])
+            # TODO: free the pointer array at some point
+
+            IF CYTHON_DEBUG >= 1:
+                print("populating dpu")
+            with nogil:
+                populateDpu(p, features, &y_float[0,0])
+
+            _dimm._data_id = data_id
+
+        IF CYTHON_DEBUG >= 1:
+            print("resetting kernel")
+        reset_kernel(p)
+
+        IF CYTHON_DEBUG >= 1:
             print("finished init_dpu")
 
         return 0
@@ -134,7 +170,7 @@ cdef class RandomDpuSplitter(Splitter):
 
         cdef bint drew_nonconstant_feature = False
 
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    drawing a feature :\n")
 
         # Sample up to max_features without replacement using a
@@ -199,7 +235,7 @@ cdef class RandomDpuSplitter(Splitter):
         self.criterion.weighted_n_right = record.weighted_n_right
         self.criterion.weighted_n_node_samples = record.weighted_n_node_samples
 
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    weighted_n_node_samples: %f, weighted_n_samples: %f\n",
                    self.criterion.weighted_n_node_samples,
                    self.criterion.weighted_n_samples)
@@ -218,8 +254,8 @@ cdef class RandomDpuSplitter(Splitter):
         cdef SIZE_t * features = record.features
         cdef SIZE_t i
 
-        IF CYTHON_DEBUG == 1:
-            printf("    Drawing threshold\n")
+        IF CYTHON_DEBUG >= 2:
+            printf("    Drawing threshold for leaf %ld and feature %ld\n", record.leaf_index, record.current.feature)
 
         min_feature_value = INFINITY
         max_feature_value = -INFINITY
@@ -227,7 +263,7 @@ cdef class RandomDpuSplitter(Splitter):
             min_feature_value = min(min_feature_value, res[i].min_max[2 * minmax_index])
             max_feature_value = max(max_feature_value, res[i].min_max[2 * minmax_index + 1])
 
-        IF CYTHON_DEBUG == 1:
+        IF CYTHON_DEBUG >= 2:
             printf("    min: %f, max: %f\n", min_feature_value, max_feature_value)
 
         if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
@@ -248,6 +284,9 @@ cdef class RandomDpuSplitter(Splitter):
             if record.current.threshold == max_feature_value:
                 record.current.threshold = min_feature_value
 
+            IF CYTHON_DEBUG >= 2:
+                printf("    drew %f\n", record.current.threshold)
+
         return 0
 
     cdef int update_evaluation(self, SetRecord * record, CommandResults * res, SIZE_t eval_index, Params * p) nogil:
@@ -264,8 +303,8 @@ cdef class RandomDpuSplitter(Splitter):
 
         current_proxy_improvement = self.criterion.proxy_impurity_improvement()
 
-        IF CYTHON_DEBUG == 1:
-            printf("    old improvement %f, new improvement %f\n", record.current_proxy_improvement, current_proxy_improvement)
+        IF CYTHON_DEBUG >= 2:
+            printf("    leaf %ld: old improvement %f, new improvement %f\n", record.leaf_index, record.current_proxy_improvement, current_proxy_improvement)
         if current_proxy_improvement > record.current_proxy_improvement:
             record.current_proxy_improvement = current_proxy_improvement
             record.best = record.current
@@ -273,7 +312,7 @@ cdef class RandomDpuSplitter(Splitter):
             record.weighted_n_right = self.criterion.weighted_n_right
             record.n_left = n_left
             record.n_right = n_right
-            IF CYTHON_DEBUG == 1:
+            IF CYTHON_DEBUG >= 2:
                 printf("    left value: ")
                 for i in range(p.nclasses):
                     printf("%f ", self.criterion.sum_left[i])

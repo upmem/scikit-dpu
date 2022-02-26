@@ -396,8 +396,6 @@ cdef class DpuTreeBuilder(TreeBuilder):
         toc = perf_counter()
         _perfcounter.time_taken = toc - tic
 
-        free_dpus(p)
-
 cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:
     """Adds a minmax instruction to the list."""

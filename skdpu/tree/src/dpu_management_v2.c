@@ -23,8 +23,15 @@ void allocate(Params *p) {
   if (p->ndpu == 0) {
     DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, NULL, &(p->allset)));
     DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
-  } else
+  } else {
+    uint32_t asked_ndpu = p->ndpu;
     DPU_ASSERT(dpu_alloc(p->ndpu, NULL, &(p->allset)));
+    DPU_ASSERT(dpu_get_nr_dpus(p->allset, &p->ndpu));
+    if(asked_ndpu > p->ndpu) {
+        printf("You asked for %u DPUs but only %u are available on this machine.\n", asked_ndpu, p->ndpu);
+        exit(-1);
+    }
+  }
 }
 
 /**
@@ -32,13 +39,13 @@ void allocate(Params *p) {
  *
  * @param p Algorithm parameters.
  */
-void free_dpus(Params *p) {
+void free_dpus(dpu_set allset) {
 
-  assert(p);
+//  assert(allset);
 #ifdef DEBUG
   printf("freeing DPUs\n");
 #endif
-  DPU_ASSERT(dpu_free(p->allset));
+  DPU_ASSERT(dpu_free(allset));
 }
 
 /**
@@ -54,6 +61,18 @@ void load_kernel(Params *p, const char *DPU_BINARY) {
   printf("loading binary %s\n", DPU_BINARY);
 #endif
   DPU_ASSERT(dpu_load(p->allset, DPU_BINARY, NULL));
+}
+
+/**
+ * @brief Resets the DPU states for a new run.
+ * 
+ * @param p Algorithm parameters.
+ */
+void reset_kernel(Params *p) {
+  uint32_t first_iteration = true;
+  DPU_ASSERT(dpu_broadcast_to(p->allset, "first_iteration", 0,
+                              &first_iteration, sizeof(uint32_t),
+                              DPU_XFER_DEFAULT));
 }
 
 struct callback_args {
@@ -269,21 +288,6 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
                               sizeof(uint32_t), DPU_XFER_ASYNC));
   DPU_ASSERT(dpu_broadcast_to(p->allset, "n_classes", 0, &(p->nclasses),
                               sizeof(uint32_t), DPU_XFER_ASYNC));
-  uint32_t nleaves = 1;
-  uint32_t leaf_start_index = 0;
-  DPU_ASSERT(dpu_broadcast_to(p->allset, "n_leaves", 0, &nleaves,
-                              sizeof(uint32_t), DPU_XFER_ASYNC));
-  DPU_ASSERT(dpu_broadcast_to(p->allset, "leaf_start_index", 0,
-                              &leaf_start_index, sizeof(uint32_t),
-                              DPU_XFER_ASYNC));
-  DPU_RANK_FOREACH(p->allset, rank, each_rank) {
-    DPU_FOREACH(rank, dpu, each_dpu) {
-      DPU_ASSERT(dpu_prepare_xfer(
-          dpu, &(cb_args[each_rank].nr_points_per_dpu[each_dpu])));
-    }
-  }
-  DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "leaf_end_index", 0,
-                           sizeof(uint32_t), DPU_XFER_ASYNC));
 
   // synchronize all ranks
 #ifdef DEBUG

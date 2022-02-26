@@ -76,6 +76,9 @@ _configtest.o.d
 
 # dpu binaries
 *.dpu
+skdpu/tree/src/dpu_programs/*
+!skdpu/tree/src/dpu_programs/**/
+!skdpu/tree/src/dpu_programs/**/*.*
 
 # notebook checkpoints
 *.ipynb_checkpoints/
