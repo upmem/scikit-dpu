@@ -119,6 +119,15 @@ __host uint32_t leaf_end_index[MAX_NB_LEAF];
 MUTEX_INIT(n_leaves_mutex);
 
 /**
+ * @brief we store the indices of the right and left neighour for each leaf
+ * This helps us being more precise in the way we handle concurrency issues
+ * when doing multiples commits. A value of UINT16_MAX means no neighbour.
+ */
+#define NO_LEAF UINT16_MAX
+uint16_t left_neighours[MAX_NB_LEAF] = {NO_LEAF};
+uint16_t right_neighours[MAX_NB_LEAF] = {NO_LEAF};
+
+/**
  * @brief size of batch of features read at once for the SPLIT_EVALUATE and
  *SPLIT_COMMIT commands
  **/
@@ -162,7 +171,6 @@ MUTEX_INIT(commit_mutex1);
 MUTEX_INIT(commit_mutex2);
 MUTEX_INIT(commit_mutex3);
 MUTEX_INIT(commit_mutex4);
-MUTEX_INIT(commit_mutex_global);
 mutex_id_t commit_mutex_array[4] = {
   commit_mutex1,
   commit_mutex2,
@@ -804,7 +812,7 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
 
     // if not aligned take mutex
     if (size < SIZE_BATCH)
-      mutex_lock(commit_mutex_global);
+      mutex_lock(commit_mutex_array[leaf_index & 3]);
 
     feature_values_commit_low = load_feature_values(
         start_index_low, feature_index, size, feature_values[me()]);
@@ -824,7 +832,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
                            feature_values[me()]);
 
     if (size < SIZE_BATCH)
-      mutex_unlock(commit_mutex_global);
+      mutex_unlock(commit_mutex_array[leaf_index & 3]);
+
     commit_loop = false;
   }
 
@@ -976,8 +985,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
   }
 
   // Here we need to handle the prolog and epilog due to alignment constraints
-  // if(leaf_index)
-  mutex_lock(commit_mutex_global);
+  if(leaf_index)
+    mutex_lock(commit_mutex_array[left_neighours[leaf_index] & 3]);
   // prolog
   uint32_t prolog_start = leaf_start_index[leaf_index];
   uint32_t prolog_end = start_index;
@@ -1048,12 +1057,11 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(start_swap_buffer, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
-  // if(leaf_index)
-  mutex_unlock(commit_mutex_global);
+  if(leaf_index)
+    mutex_unlock(commit_mutex_array[left_neighours[leaf_index] & 3]);
 
-  // TODO : restore this check once we have a leaf adjacency array
-  // if(n_leaves && leaf_index < n_leaves - 1)
-  mutex_lock(commit_mutex_global);
+  if(n_leaves > 1 && right_neighours[leaf_index] != NO_LEAF)
+    mutex_lock(commit_mutex_array[leaf_index & 3]);
 
   // epilog
   uint32_t epilog_start = start_index + size;
@@ -1121,9 +1129,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(old_pivot, feature_index, max_n_elems_pivot,
                            feature_values3[me()]);
   }
-  // TODO : restore this check once we have a leaf adjacency array
-  // if(n_leaves && leaf_index < n_leaves - 1)
-  mutex_unlock(commit_mutex_global);
+  if(n_leaves > 1 && right_neighours[leaf_index] != NO_LEAF)
+    mutex_unlock(commit_mutex_array[leaf_index & 3]);
 
   // update leaf indexes
   if (self) {
@@ -1136,11 +1143,14 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
         leaf_end_index[leaf_index] - leaf_start_index[leaf_index];
 #endif
     assert(index_new_leaf < MAX_NB_LEAF);
-    mutex_lock(n_leaves_mutex);
     uint32_t index_tmp = leaf_end_index[leaf_index];
     leaf_end_index[leaf_index] = pivot;
     leaf_start_index[index_new_leaf] = pivot;
     leaf_end_index[index_new_leaf] = index_tmp;
+    left_neighours[index_new_leaf] = leaf_index;
+    right_neighours[index_new_leaf] = right_neighours[leaf_index];
+    right_neighours[leaf_index] = index_new_leaf;
+    mutex_lock(n_leaves_mutex);
     n_leaves++;
     mutex_unlock(n_leaves_mutex);
 #ifdef DEBUG
@@ -1277,6 +1287,7 @@ int main() {
       n_leaves = 1;
       leaf_start_index[0] = 0;
       leaf_end_index[0] = n_points;
+      right_neighours[0] = NO_LEAF;
       first_iteration = false;
     }
     batch_cnt = 0;
@@ -1319,10 +1330,10 @@ int main() {
         do_split_commit(index_cmd, index_batch, 0);
 
       bool last = false;
-      mutex_lock(commit_mutex_global);
+      mutex_lock(commit_mutex_array[leaf_index & 3]);
       if (++cmd_tasklet_cnt[index_cmd] == n_features)
         last = true;
-      mutex_unlock(commit_mutex_global);
+      mutex_unlock(commit_mutex_array[leaf_index & 3]);
 
       if (last) {
         if (!empty) {
