@@ -803,8 +803,8 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
     assert(size <= SIZE_BATCH);
 
     // if not aligned take mutex
-    // if (size < SIZE_BATCH)
-    mutex_lock(commit_mutex_global);
+    if (size < SIZE_BATCH)
+      mutex_lock(commit_mutex_global);
 
     feature_values_commit_low = load_feature_values(
         start_index_low, feature_index, size, feature_values[me()]);
@@ -823,15 +823,14 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
       store_feature_values(start_index_low, feature_index, size,
                            feature_values[me()]);
 
-    // if (size < SIZE_BATCH)
-    mutex_unlock(commit_mutex_global);
+    if (size < SIZE_BATCH)
+      mutex_unlock(commit_mutex_global);
     commit_loop = false;
   }
 
   bool load_low = true, load_high = true;
   uint16_t low_index = 0, high_index = 0;
   while (commit_loop) {
-    mutex_lock(commit_mutex_global);
 
     // load buffers for the feature we want to handle the swap for
     // and load buffers of the split feature, used for the comparisons
@@ -974,7 +973,6 @@ static void do_split_commit(uint16_t index_cmd, uint32_t feature_index,
         load_high = true;
       }
     }
-    mutex_unlock(commit_mutex_global);
   }
 
   // Here we need to handle the prolog and epilog due to alignment constraints
