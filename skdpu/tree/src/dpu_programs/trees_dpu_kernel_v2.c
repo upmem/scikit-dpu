@@ -678,17 +678,10 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
   uint16_t leaf_index = cmds_array[index_cmd].leaf_index;
   uint32_t start_index = leaf_start_index[leaf_index];
   uint32_t end_index = leaf_end_index[leaf_index];
-  // garuantee there is always a prolog (except for leftmost leaf)
-  if(start_index)
-    *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t) + 8) / sizeof(feature_t));
-  else
-    *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
-
-  // TODO: add check for last leaf
-  int32_t end_index_align = (ALIGN_8_LOW(end_index * sizeof(feature_t) - 8)  / sizeof(feature_t));
+  *index = (ALIGN_8_HIGH(start_index * sizeof(feature_t)) / sizeof(feature_t));
 
   // handle the case where *index > end_index
-  if (*index >= end_index_align) {
+  if (*index >= end_index) {
     // in this case we treat the leaf at once
     // No prolog/epilog but the partitioning will be protected
     // by mutex
@@ -696,13 +689,12 @@ static void get_index_and_size_for_commit(uint16_t index_cmd, uint32_t *index,
     *size = end_index - start_index;
     return;
   }
-  // uint32_t nb_buffers = (end_index - *index) / SIZE_BATCH;
-  uint32_t nb_buffers = (end_index_align - *index) / SIZE_BATCH;
+  uint32_t nb_buffers = (end_index - *index) / SIZE_BATCH;
   if (nb_buffers)
     *size = nb_buffers * SIZE_BATCH;
   else {
     // case where the size is less than one buffer
-    *size = end_index_align - *index;
+    *size = end_index - *index;
   }
 }
 
