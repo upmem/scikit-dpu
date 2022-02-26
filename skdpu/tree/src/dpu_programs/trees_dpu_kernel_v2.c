@@ -112,7 +112,7 @@ uint16_t res_indexes[MAX_NB_LEAF];
  * in the tree leaf leaf_end_index is the end index of the tree leaf, the start
  * index of the next leaf
  **/
-__host uint32_t n_leaves;
+uint32_t n_leaves;
 uint32_t start_n_leaves;
 __host uint32_t leaf_start_index[MAX_NB_LEAF];
 __host uint32_t leaf_end_index[MAX_NB_LEAF];
@@ -1274,6 +1274,8 @@ int main() {
   // initialization
   if (me() == 0) {
     if(first_iteration) {
+      n_leaves = 1;
+      leaf_start_index[0] = 0;
       leaf_end_index[0] = n_points;
       first_iteration = false;
     }
