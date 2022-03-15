@@ -82,9 +82,10 @@ else:
     extra_setuptools_args = dict()
 
 if 'extras_require' not in extra_setuptools_args:
-    extra_setuptools_args['extras_require'] = {'test': 'pytest'}
+    extra_setuptools_args['extras_require'] = {'test': 'pytest', 'benchmarks': ['pandas', 'hurry.filesize']}
 else:
     extra_setuptools_args['extras_require']['test'] = 'pytest'
+    extra_setuptools_args['extras_require']['benchmarks'] = ['pandas', 'hurry.filesize']
 
 
 # Custom clean command to remove build artifacts
