@@ -1,30 +1,31 @@
-import pandas as pd
+import sys
+from time import perf_counter
+
 import numpy as np
+import pandas as pd
 from hurry.filesize import size
 
+from skdpu.tree import _perfcounter as _perfcounter_dpu
 from skdpu.tree._classes import DecisionTreeClassifierDpu
-from sklearn.tree import DecisionTreeClassifier
-
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
-
-from time import perf_counter
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree import _perfcounter as _perfcounter_cpu
-from skdpu.tree import _perfcounter as _perfcounter_dpu
+from sklearn.utils import shuffle
 
 MAX_FEATURE_DPU = 5000000
 
-ndpu_list = [10, 30, 100, 300, 1000, 2524]
+ndpu_list = [256, 512, 1024, 2048]
 
-# df = pd.read_csv("data/HIGGS.csv", dtype=np.float32, header=None, sep=",")
-# df.to_parquet("./data/higgs.pq", index=False, compression=None)
-
-df = pd.read_parquet("data/higgs.pq")
+if len(sys.argv) >= 2:
+    higgs_file = sys.argv[1]
+else:
+    higgs_file = "data/higgs.pq"
+df = pd.read_parquet(higgs_file)
 
 X, y = np.require(df.iloc[:, 1:].to_numpy(), requirements=['C', 'A', 'O']), np.require(df.iloc[:, 0].to_numpy(),
                                                                                        requirements=['C', 'A', 'O'])
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500000)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500000, shuffle=False)
 
 npoints, nfeatures = X_train.shape
 
@@ -94,4 +95,4 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
          "Total time on CPU": total_times_cpu},
         index=ndpu_effective)
 
-    df.to_csv("../higgs_results.csv")
+    df.to_csv("higgs_results.csv")
