@@ -12,6 +12,7 @@
 #include <dpu.h>
 #include <dpu_target.h>
 #include <math.h>
+#include <sys/time.h>
 typedef struct dpu_set_t dpu_set;
 
 // Parameters holding struct
@@ -32,6 +33,9 @@ typedef struct Params {
   dpu_set allset;
   int from_file;
   int verbose;
+  struct timeval tic;
+  struct timeval toc;
+  double dpu_timer;
 } Params;
 
 /**

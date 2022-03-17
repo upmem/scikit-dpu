@@ -41,6 +41,7 @@ cdef extern from "src/trees.h":
         dpu_set allset
         int from_file
         int verbose
+        double dpu_timer
 
 cdef class DpuTreeBuilder(TreeBuilder):
     cdef Params p

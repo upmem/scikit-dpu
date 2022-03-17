@@ -186,6 +186,9 @@ cdef class DpuTreeBuilder(TreeBuilder):
             # initializing the results array
             res = <CommandResults *> malloc(p.ndpu * sizeof(CommandResults))
 
+            # intializing DPU timer
+            p.dpu_timer = 0
+
             # add root to frontier
             IF CYTHON_DEBUG == 1:
                 printf("adding root to frontier with %lu samples\n", n_node_samples)
@@ -395,6 +398,7 @@ cdef class DpuTreeBuilder(TreeBuilder):
             raise MemoryError()
         toc = perf_counter()
         _perfcounter.time_taken = toc - tic
+        _perfcounter.dpu_time = p.dpu_timer
 
 cdef inline int add_minmax_instruction(Command * command, SetRecord * record,
                                        CommandArray * cmd_arr) nogil except -1:

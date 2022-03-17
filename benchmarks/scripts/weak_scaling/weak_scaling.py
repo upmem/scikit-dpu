@@ -1,13 +1,14 @@
+from time import perf_counter
+
+import pandas as pd
+from hurry.filesize import size
+
+from skdpu.tree import _perfcounter as _perfcounter_dpu
 from skdpu.tree._classes import DecisionTreeClassifierDpu
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.tree import export_graphviz
 from sklearn.datasets import make_blobs
 from sklearn.metrics import accuracy_score
-from time import perf_counter
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree import _perfcounter as _perfcounter_cpu
-from skdpu.tree import _perfcounter as _perfcounter_dpu
-from hurry.filesize import size
-import pandas as pd
 
 ndpu_list = [1, 4, 16, 64]
 npoints_per_dpu = int(1e5)
@@ -16,6 +17,8 @@ nfeatures = 16
 accuracies_dpu = []
 accuracies_cpu = []
 build_times_dpu = []
+dpu_times_dpu = []
+
 build_times_cpu = []
 total_times_dpu = []
 total_times_cpu = []
@@ -41,9 +44,11 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
     accuracies_dpu.append(dpu_accuracy)
     build_times_dpu.append(_perfcounter_dpu.time_taken)
     total_times_dpu.append(toc - tic)
+    dpu_times_dpu.append(_perfcounter_dpu.dpu_time)
     print(f"Accuracy for DPUs: {dpu_accuracy}")
     print(f"build time for DPUs : {_perfcounter_dpu.time_taken} s")
     print(f"total time for DPUs: {toc - tic} s")
+    print(f"DPU runtime for DPUs: {_perfcounter_dpu.dpu_time} s")
 
     clf2 = DecisionTreeClassifier(random_state=0, criterion='gini', splitter='random', max_depth=10)
 
@@ -63,8 +68,8 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
 
     df = pd.DataFrame(
         {"DPU accuracy": accuracies_dpu, "CPU accuracy": accuracies_cpu, "Build time on DPU": build_times_dpu,
-         "Build time on CPU": build_times_cpu, "Total time on DPU": total_times_dpu,
+         "DPU runtime": dpu_times_dpu, "Build time on CPU": build_times_cpu, "Total time on DPU": total_times_dpu,
          "Total time on CPU": total_times_cpu},
-        index=ndpu_list[:i_ndpu+1])
+        index=ndpu_list[:i_ndpu + 1])
 
     df.to_csv("weak_scaling.csv")

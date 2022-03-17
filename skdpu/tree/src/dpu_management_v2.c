@@ -323,6 +323,22 @@ void addCommand(struct CommandArray *arr, struct Command cmd) {
   arr->cmds[arr->nb_cmds++] = cmd;
 }
 
+/**
+ * @brief Returns the seconds elapsed between two timeval structures.
+ *
+ * @param tic [in] First timeval.
+ * @param toc [in] Second timeval.
+ * @return double Elapsed time in seconds.
+ */
+static double time_seconds(struct timeval tic, struct timeval toc) {
+  struct timeval timing;
+  timing.tv_sec = toc.tv_sec - tic.tv_sec;
+  timing.tv_usec = toc.tv_usec - tic.tv_usec;
+  double time = ((double)(timing.tv_sec * 1000000 + timing.tv_usec)) / 1000000;
+
+  return time;
+}
+
 void pushCommandArray(Params *p, struct CommandArray *arr) {
 
   // transfer the command array
@@ -333,6 +349,7 @@ void pushCommandArray(Params *p, struct CommandArray *arr) {
                               sizeof(uint32_t), DPU_XFER_ASYNC));
 
   // launch the DPUs
+  gettimeofday(&p->tic, NULL);
   DPU_ASSERT(dpu_launch(p->allset, DPU_ASYNCHRONOUS));
 }
 
@@ -375,6 +392,9 @@ void syncCommandArrayResults(Params *p, struct CommandArray *arr,
 
   // sync all ranks
   DPU_ASSERT(dpu_sync(p->allset));
+  gettimeofday(&p->toc, NULL);
+  p->dpu_timer+=time_seconds(p->tic, p->toc);
+
 #ifdef DEBUG
   //DEBUG: print the transfered arrays
   printf("array seen on C side\n");
