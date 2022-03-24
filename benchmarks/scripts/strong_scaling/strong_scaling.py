@@ -5,13 +5,16 @@ from hurry.filesize import size
 
 from skdpu.tree import _perfcounter as _perfcounter_dpu
 from skdpu.tree._classes import DecisionTreeClassifierDpu
-from sklearn.datasets import make_blobs
+from sklearn.datasets import make_classification
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree import _perfcounter as _perfcounter_cpu
 
-ndpu_list = [256, 512, 1024, 2048]
-npoints = int(6e5) * 256
+ndpu_list = [256, 512, 1024, 2048, 2524]
+train_size = int(6e5) * 256
+test_size = int(1e5) * 256
+npoints = train_size + test_size
 nfeatures = 16
 random_state = 42
 
@@ -30,21 +33,22 @@ inter_pim_core_times = []
 cpu_pim_times = []
 dpu_kernel_times = []
 
-print(f"number of points : {npoints}")
-data_size = npoints * (nfeatures + 1) * 4
+print(f"number of points : {train_size}")
+data_size = train_size * (nfeatures + 1) * 4
 print(f"data size = {size(data_size)}")
 
-# X, y = make_classification(n_samples=npoints, n_features=nfeatures, random_state=random_state)
-X, y = make_blobs(n_samples=npoints, n_features=nfeatures, random_state=random_state, centers=3)
+X, y = make_classification(n_samples=npoints, n_features=nfeatures, n_informative=4, n_redundant=4,
+                           random_state=random_state)
+X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=train_size, shuffle=False)
 
 clf2 = DecisionTreeClassifier(random_state=random_state, criterion='gini', splitter='random', max_depth=10)
 
 tic = perf_counter()
-# clf2.fit(X, y)
+clf2.fit(X_train, y_train)
 toc = perf_counter()
 # export_graphviz(clf2, out_file="tree_cpu.dot")
-# y_pred2 = clf2.predict(X)
-cpu_accuracy = 0  # accuracy_score(y, y_pred2)
+y_pred2 = clf2.predict(X_test)
+cpu_accuracy = accuracy_score(y_test, y_pred2)
 
 cpu_total_time = toc - tic
 print(f"Accuracy for CPU: {cpu_accuracy}")
@@ -56,11 +60,11 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
                                     max_depth=10)
 
     tic = perf_counter()
-    clf.fit(X, y)
+    clf.fit(X_train, y_train)
     toc = perf_counter()
     # export_graphviz(clf, out_file="tree_dpu.dot")
-    y_pred = clf.predict(X)
-    dpu_accuracy = accuracy_score(y, y_pred)
+    y_pred = clf.predict(X_test)
+    dpu_accuracy = accuracy_score(y_test, y_pred)
 
     # read DPU times
     accuracies_dpu.append(dpu_accuracy)
