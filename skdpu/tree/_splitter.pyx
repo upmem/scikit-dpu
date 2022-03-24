@@ -1,6 +1,8 @@
 # Authors: Sylvan Brocard
 #
 # License: MIT
+from time import perf_counter
+
 import xxhash
 from sklearn.tree._splitter cimport Splitter
 
@@ -13,6 +15,7 @@ np.import_array()
 
 from . cimport _dimm
 from . import _dimm
+from . import _perfcounter
 
 try:
     from importlib.resources import files, as_file
@@ -72,6 +75,7 @@ cdef class RandomDpuSplitter(Splitter):
         p.nfeatures = self.n_features
         p.nclasses = (<GiniDpu>self.criterion).n_classes[0]
 
+        tic = perf_counter()
         if not _dimm._allocated:
             IF CYTHON_DEBUG >= 1:
                 print("allocating dpus")
@@ -108,6 +112,9 @@ cdef class RandomDpuSplitter(Splitter):
             _dimm._kernel = "tree"
             _dimm._data_id = None
 
+        toc = perf_counter()
+        _perfcounter.dpu_init_time = toc - tic
+
         h = xxhash.xxh3_64()  # data_id = id(X)
         h.update(X)
         data_id = h.digest()
@@ -123,8 +130,11 @@ cdef class RandomDpuSplitter(Splitter):
 
             IF CYTHON_DEBUG >= 1:
                 print("populating dpu")
+            tic = perf_counter()
             with nogil:
                 populateDpu(p, features, &y_float[0,0])
+            toc = perf_counter()
+            _perfcounter.cpu_pim_time = toc - tic
 
             _dimm._data_id = data_id
 
