@@ -21,7 +21,7 @@
  */
 /**@{*/
 #define MAX_FEATURE_DPU                                                        \
-  5000000 /**< How many features we fit into one DPU's MRAM. Can be            \
+  10000000 /**< How many features we fit into one DPU's MRAM. Can be            \
              increased further. */
 #define MAX_SAMPLES_DPU                                                        \
   5000000 /**< How many samples we fit into one DPU's MRAM. Can be increased   \
