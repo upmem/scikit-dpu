@@ -20,10 +20,8 @@ nfeatures = 16
 random_state = 42
 
 accuracies_gpu = []
-accuracies_cpu = []
 
 total_times_gpu = []
-total_times_cpu = []
 
 init_times_gpu = []
 transfer_times_gpu = []
@@ -66,10 +64,10 @@ y_train_gpu = cudf.DataFrame(y_train)
 toc = perf_counter()
 transfer_time_gpu = toc - tic
 
-clf = cuRFC(n_estimators=1, random_state=random_state, split_criterion='gini', max_depth=10, bootstrap=False, max_features=1.0)
+clf = cuRFC(n_estimators=1, random_state=random_state, split_criterion='gini', max_depth=10, bootstrap=False, max_features=1.0, n_streams=1)
 
 tic = perf_counter()
-cProfile.run("clf.fit(X_train, y_train)", f"strong_gpu.prof")
+cProfile.run("clf.fit(X_train_gpu, y_train_gpu)", f"strong_gpu.prof")
 toc = perf_counter()
 # export_graphviz(clf, out_file="tree_dpu.dot")
 y_pred = clf.predict(X_test)
@@ -80,36 +78,15 @@ accuracies_gpu.append(gpu_accuracy)
 total_times_gpu.append(toc - tic)
 init_times_gpu.append(init_time_gpu)
 transfer_times_gpu.append(transfer_time_gpu)
-print(f"Accuracy for DPUs: {gpu_accuracy}")
-print(f"total time for DPUs: {toc - tic} s")
-
-##################################################
-#                   CPU PERF                     #
-##################################################
-
-clf2 = RFC(n_estimators=1, random_state=random_state, criterion='gini', max_depth=10, bootstrap=False, max_features=1.0)
-
-tic = perf_counter()
-cProfile.run("clf2.fit(X_train, y_train)", f"strong_cpu.prof")
-toc = perf_counter()
-# export_graphviz(clf2, out_file="tree_cpu.dot")
-y_pred2 = clf2.predict(X)
-cpu_accuracy = accuracy_score(y, y_pred2)
-
-# read CPU times
-accuracies_cpu.append(cpu_accuracy)
-total_times_cpu.append(toc - tic)
-print(f"Accuracy for CPU: {cpu_accuracy}")
-print(f"total time for CPUs: {toc - tic} s")
+print(f"Accuracy for GPUs: {gpu_accuracy}")
+print(f"total time for GPUs: {toc - tic} s")
 
 df = pd.DataFrame(
     {
         "GPU_times": total_times_gpu,
         "GPU_init_time": init_times_gpu,
         "GPU_transfer_times": transfer_times_gpu,
-        "CPU_times": total_times_cpu,
         "GPU_scores": gpu_accuracy,
-        "CPU_scores": cpu_accuracy,
     },
 )
 
