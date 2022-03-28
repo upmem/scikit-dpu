@@ -91,7 +91,7 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
             "GPU_times": total_times_gpu,
             "GPU_init_time": init_times_gpu,
             "GPU_transfer_times": transfer_times_gpu,
-            "GPU_scores": gpu_accuracy,
+            "GPU_scores": accuracies_gpu,
         },
         index=ndpu_list[:i_ndpu + 1])
 
