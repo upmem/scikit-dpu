@@ -30,8 +30,8 @@ else:
     higgs_file = "data/higgs.pq"
 df = pd.read_parquet(higgs_file)
 
-X, y = np.require(df.iloc[:, 1:].to_numpy(), requirements=['C', 'A', 'O']), np.require(df.iloc[:, 0].to_numpy(),
-                                                                                       requirements=['C', 'A', 'O'])
+X = np.require(df.iloc[:, 1:].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
+y = np.require(df.iloc[:, 0].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500000, shuffle=False)
 
 train_size, nfeatures = X_train.shape

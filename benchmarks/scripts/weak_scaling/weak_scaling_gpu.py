@@ -1,4 +1,5 @@
 from time import perf_counter
+import sys
 
 import numpy as np
 import pandas as pd
@@ -52,7 +53,10 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
 
     X, y = make_classification(n_samples=npoints_per_dpu * ndpu, n_features=nfeatures, n_informative=4, n_redundant=4,
                                random_state=random_state)
+    X = X.astype(np.float32)
+    y = y.astype(np.float32)
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=train_size_per_dpu * ndpu, shuffle=False)
+    print(f"data size = {size(sys.getsizeof(X_train) + sys.getsizeof(y_train))}")
 
     ##################################################
     #                   GPU PERF                     #

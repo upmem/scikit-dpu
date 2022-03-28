@@ -39,6 +39,8 @@ print(f"data size = {size(data_size)}")
 
 X, y = make_classification(n_samples=npoints, n_features=nfeatures, n_informative=4, n_redundant=4,
                            random_state=random_state)
+X = X.astype(np.float32)
+y = y.astype(np.float32)
 X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=train_size, shuffle=False)
 
 clf2 = DecisionTreeClassifier(random_state=random_state, criterion='gini', splitter='random', max_depth=10)
