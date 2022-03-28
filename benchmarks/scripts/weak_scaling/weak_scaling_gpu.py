@@ -96,3 +96,5 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
         index=ndpu_list[:i_ndpu + 1])
 
     df.to_csv("weak_scaling_gpu.csv")
+
+    del X_train_gpu, y_train_gpu
