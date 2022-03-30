@@ -40,6 +40,8 @@ cdef extern from "src/trees.h":
         dpu_set allset
         int from_file
         int verbose
+        double dpu_timer
+        double cpu_pim_timer
     struct CommandResults:
         INT32_t nb_gini
         INT32_t nb_minmax

@@ -157,6 +157,22 @@ feature_t **build_jagged_array(Params *p, feature_t *features_flat) {
   return features;
 }
 
+/**
+ * @brief Returns the seconds elapsed between two timeval structures.
+ *
+ * @param tic [in] First timeval.
+ * @param toc [in] Second timeval.
+ * @return double Elapsed time in seconds.
+ */
+static double time_seconds(struct timeval tic, struct timeval toc) {
+  struct timeval timing;
+  timing.tv_sec = toc.tv_sec - tic.tv_sec;
+  timing.tv_usec = toc.tv_usec - tic.tv_usec;
+  double time = ((double)(timing.tv_sec * 1000000 + timing.tv_usec)) / 1000000;
+
+  return time;
+}
+
 #define SIZE_BATCH_POINT_TRANSFER (1024 * 256)
 
 /**
@@ -181,6 +197,8 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   uint32_t points_rest = p->npoints - (nr_points_dpu * p->ndpu);
   uint32_t start_index_dpu = 0;
   uint32_t dpu_index = 0;
+  struct timeval tic, toc;
+  double transfer_timer=0;
 
   // prepare the data necessary for the callback
 #ifdef DEBUG
@@ -228,13 +246,16 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback, cb_args,
                             DPU_CALLBACK_ASYNC));
+    DPU_ASSERT(dpu_sync(p->allset));
 
+    gettimeofday(&tic, NULL);
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
       DPU_FOREACH(rank, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(
             dpu, cb_args[each_rank].dpu_features_buffer[each_dpu]));
       }
     }
+
     uint32_t size = SIZE_BATCH_POINT_TRANSFER;
     if (i == nb_batches - 1) {
       size = ALIGN_8_HIGH(((points_rest ? nr_points_dpu + 1 : nr_points_dpu) * p->nfeatures) - (i * SIZE_BATCH_POINT_TRANSFER));
@@ -242,6 +263,9 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_features",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
                              size * sizeof(feature_t), DPU_XFER_ASYNC));
+    DPU_ASSERT(dpu_sync(p->allset));
+    gettimeofday(&toc, NULL);
+    transfer_timer += time_seconds(tic, toc);
   }
 
   // Now handle the targets
@@ -255,7 +279,9 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
 
     DPU_ASSERT(dpu_callback(p->allset, dpu_rank_points_vector_callback, cb_args,
                             DPU_CALLBACK_ASYNC));
+    DPU_ASSERT(dpu_sync(p->allset));
 
+    gettimeofday(&tic, NULL);
     // TODO the DPU_XFER_NO_RESET flag does not seem to work with async
     DPU_RANK_FOREACH(p->allset, rank, each_rank) {
       DPU_FOREACH(rank, dpu, each_dpu) {
@@ -270,8 +296,12 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
     DPU_ASSERT(dpu_push_xfer(p->allset, DPU_XFER_TO_DPU, "t_targets",
                              i * SIZE_BATCH_POINT_TRANSFER * sizeof(feature_t),
                              size * sizeof(feature_t), DPU_XFER_ASYNC));
+    DPU_ASSERT(dpu_sync(p->allset));
+    gettimeofday(&toc, NULL);
+    transfer_timer += time_seconds(tic, toc);
   }
 
+  gettimeofday(&tic, NULL);
   // transfer meta-data to DPU
 #ifdef DEBUG
   printf("transfering metadata\n");
@@ -294,6 +324,9 @@ void populateDpu(Params *p, feature_t **features, feature_t *targets) {
   printf("synchronizing ranks\n");
 #endif
   DPU_ASSERT(dpu_sync(p->allset));
+  gettimeofday(&toc, NULL);
+  transfer_timer += time_seconds(tic, toc);
+  p->cpu_pim_timer = transfer_timer;
 
   // free memory
 #ifdef DEBUG
@@ -321,22 +354,6 @@ void addCommand(struct CommandArray *arr, struct Command cmd) {
 
   assert(arr->nb_cmds < MAX_NB_LEAF);
   arr->cmds[arr->nb_cmds++] = cmd;
-}
-
-/**
- * @brief Returns the seconds elapsed between two timeval structures.
- *
- * @param tic [in] First timeval.
- * @param toc [in] Second timeval.
- * @return double Elapsed time in seconds.
- */
-static double time_seconds(struct timeval tic, struct timeval toc) {
-  struct timeval timing;
-  timing.tv_sec = toc.tv_sec - tic.tv_sec;
-  timing.tv_usec = toc.tv_usec - tic.tv_usec;
-  double time = ((double)(timing.tv_sec * 1000000 + timing.tv_usec)) / 1000000;
-
-  return time;
 }
 
 void pushCommandArray(Params *p, struct CommandArray *arr) {

@@ -33,9 +33,10 @@ typedef struct Params {
   dpu_set allset;
   int from_file;
   int verbose;
+  double dpu_timer;
+  double cpu_pim_timer;
   struct timeval tic;
   struct timeval toc;
-  double dpu_timer;
 } Params;
 
 /**

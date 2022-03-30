@@ -134,7 +134,8 @@ cdef class RandomDpuSplitter(Splitter):
             with nogil:
                 populateDpu(p, features, &y_float[0,0])
             toc = perf_counter()
-            _perfcounter.cpu_pim_time = toc - tic
+            # _perfcounter.cpu_pim_time = toc - tic
+            _perfcounter.cpu_pim_time = p.cpu_pim_timer
 
             _dimm._data_id = data_id
 
