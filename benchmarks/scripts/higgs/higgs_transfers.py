@@ -99,4 +99,4 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
         },
         index=ndpu_effective)
 
-    df.to_csv("higgs_results.csv")
+    df.to_csv("higgs_transfers.csv")

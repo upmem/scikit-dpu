@@ -76,4 +76,4 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
         },
         index=ndpu_list[:i_ndpu + 1])
 
-    df.to_csv("strong_scaling.csv")
+    df.to_csv("strong_scaling_transfers.csv")
