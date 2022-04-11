@@ -2,6 +2,17 @@
 
 PIM-enabled scikit-learn extension
 
+This is a library that provides hardware acceleration for scikit-learn algorithms with UPMEM PIM devices.
+Currently supported algorithms are:
+
+- Classification trees (extremely randomized version a.k.a. scikit-learn's extra trees)
+
+Algorithms being integrated are:
+
+- Linear regression
+- Logistic regression
+- K-Means
+
 .. list-table::
   :header-rows: 1
 
