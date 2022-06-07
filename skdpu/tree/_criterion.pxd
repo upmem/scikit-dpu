@@ -2,6 +2,17 @@
 #
 # License: MIT
 
+# Disclaimer: Part of this code is adapted from scikit-learn
+# with the following license:
+# Authors: Gilles Louppe <g.louppe@gmail.com>
+#          Peter Prettenhofer <peter.prettenhofer@gmail.com>
+#          Brian Holt <bdholt1@gmail.com>
+#          Joel Nothman <joel.nothman@gmail.com>
+#          Arnaud Joly <arnaud.v.joly@gmail.com>
+#          Jacob Schreiber <jmschreiber91@gmail.com>
+#
+# License: BSD 3 clause
+
 from sklearn.tree._tree cimport DTYPE_t  # Type of X
 from sklearn.tree._tree cimport DOUBLE_t  # Type of y, sample_weight
 from sklearn.tree._tree cimport SIZE_t  # Type for indices and counters

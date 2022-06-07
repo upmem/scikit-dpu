@@ -2,6 +2,16 @@
 #
 # License: MIT
 
+# Disclaimer: Part of this code is adapted from scikit-learn
+# with the following license:
+# Authors: Gilles Louppe <g.louppe@gmail.com>
+#          Peter Prettenhofer <peter.prettenhofer@gmail.com>
+#          Arnaud Joly <arnaud.v.joly@gmail.com>
+#          Jacob Schreiber <jmschreiber91@gmail.com>
+#          Nelson Liu <nelson@nelsonliu.me>
+#
+# License: BSD 3 clause
+
 import numpy as np
 
 from libc.stdlib cimport free

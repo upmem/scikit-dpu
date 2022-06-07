@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """DIMM memory manager module"""
 
-# Author: Sylvan Brocard <sbrocard@upmem.com>
+# Authors: Sylvan Brocard
+#
 # License: MIT
 
 import atexit

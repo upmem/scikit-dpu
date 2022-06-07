@@ -7,6 +7,19 @@ randomized trees. Single and multi-output problems are both handled.
 #
 # License: MIT
 
+# Disclaimer: Part of this code is adapted from scikit-learn
+# with the following license:
+# Authors: Gilles Louppe <g.louppe@gmail.com>
+#          Peter Prettenhofer <peter.prettenhofer@gmail.com>
+#          Brian Holt <bdholt1@gmail.com>
+#          Noel Dawe <noel@dawe.me>
+#          Satrajit Gosh <satrajit.ghosh@gmail.com>
+#          Joly Arnaud <arnaud.v.joly@gmail.com>
+#          Fares Hedayati <fares.hedayati@gmail.com>
+#          Nelson Liu <nelson@nelsonliu.me>
+#
+# License: BSD 3 clause
+
 import numbers
 import warnings
 import copy

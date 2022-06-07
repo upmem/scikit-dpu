@@ -2,6 +2,18 @@
 #
 # License: MIT
 
+# Disclaimer: Part of this code is adapted from scikit-learn
+# with the following license:
+# Authors: Gilles Louppe <g.louppe@gmail.com>
+#          Peter Prettenhofer <peter.prettenhofer@gmail.com>
+#          Brian Holt <bdholt1@gmail.com>
+#          Joel Nothman <joel.nothman@gmail.com>
+#          Arnaud Joly <arnaud.v.joly@gmail.com>
+#          Jacob Schreiber <jmschreiber91@gmail.com>
+#          Nelson Liu <nelson@nelsonliu.me>
+#
+# License: BSD 3 clause
+
 cimport numpy as np
 
 from sklearn.tree._tree cimport DTYPE_t          # Type of X
