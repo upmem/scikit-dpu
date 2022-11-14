@@ -1,39 +1,81 @@
 """
-Converts the hashes features in the Criteo dataset to continuous features.
+Converts the hashes features in the Criteo dataset to numerical features.
 """
 
+import sys
+import os
 import pandas as pd
 import numpy as np
+from category_encoders import MEstimateEncoder
 
-for i in range(1):
-    filename = f"/home/upmemstaff/sbrocard/datasets/criteo/day_{i}.gz"
-    df = pd.read_csv(filename, header=None, sep="\t", compression='gzip', nrows=1000)
+NR_DAYS_IN_TRAIN_SET = 2
+NR_DAYS_IN_TEST_SET = NR_DAYS_IN_TRAIN_SET
 
-df = pd.concat([pd.read_csv(filename, header=None, sep="\t", compression='gzip', nrows=1000) for i in range(2)], ignore_index=True)
-df.columns = df.columns.astype(str)
+if len(sys.argv) >= 2:
+    criteo_folder = sys.argv[1]
+else:
+    criteo_folder = "~/datasets/criteo"
 
-for col in range(14, 40):
-    df[f"count_{col}"] = df[str(col)].groupby(df[str(col)]).transform('count')
-for col in range(14, 40):
-    df[f"mean_{col}"] = df.groupby(str(col), as_index=False)['0'].transform('mean')
+print("converting training days")
 
-df.drop(columns=[str(i) for i in range(14, 40)], inplace=True)
+typedict = dict(
+    [[i, np.float32] for i in range(14)] + [[i, str] for i in range(14, 40)]
+)
 
-df = df.astype(np.float32)
+df = pd.concat(
+    [
+        pd.read_csv(
+            os.path.join(criteo_folder, f"day_{i}.gz"),
+            dtype=typedict,
+            header=None,
+            sep="\t",
+            compression="gzip",
+            # nrows=1000,
+        )
+        for i in range(NR_DAYS_IN_TRAIN_SET)
+    ],
+    ignore_index=True,
+)
 
+print("read")
 
-# TODO: replace with scikit-contrib category encoders
+y = df.iloc[:, 0]
 
+enc = MEstimateEncoder(m=0).fit(df, y)
+df = enc.transform(df)
 
-
-
-global_average = df['0'].mean()
-
-values = dict()
-for col in range(14):
-    values[str(col)] = 0
-for col in range(14, 40):
-    values[f"mean_{col}"] = global_average
-    values[f"count_{col}"] = 0
-
+values = dict([i, 0] for i in range(14))
 df.fillna(value=values, inplace=True)
+
+print("encoded")
+
+df.columns = df.columns.astype(str)
+df.to_parquet(
+    f"./data/train_day_0_to_{NR_DAYS_IN_TRAIN_SET-1}.pq", index=False, compression=None
+)
+
+print("converting test days")
+
+df = pd.concat(
+    [
+        pd.read_csv(
+            os.path.join(criteo_folder, f"day_{i}.gz"),
+            dtype=typedict,
+            header=None,
+            sep="\t",
+            compression="gzip",
+            nrows=1000,
+        )
+        for i in range(NR_DAYS_IN_TRAIN_SET, NR_DAYS_IN_TRAIN_SET + NR_DAYS_IN_TEST_SET)
+    ],
+    ignore_index=True,
+)
+
+df = enc.transform(df)
+df.fillna(value=values, inplace=True)
+df.columns = df.columns.astype(str)
+df.to_parquet(
+    f"./data/test_day_{NR_DAYS_IN_TRAIN_SET}_to_{NR_DAYS_IN_TRAIN_SET + NR_DAYS_IN_TEST_SET - 1}.pq",
+    index=False,
+    compression=None,
+)

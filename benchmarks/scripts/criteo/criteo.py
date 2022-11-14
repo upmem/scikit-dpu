@@ -16,39 +16,47 @@ from sklearn.utils import shuffle
 
 MAX_FEATURE_DPU = 10000000
 
-ndpu_list = [2040]
+ndpu_list = [64]
 random_state = 42
+
+NR_DAYS_IN_TRAIN_SET = 2
+NR_DAYS_IN_TEST_SET = NR_DAYS_IN_TRAIN_SET
 
 if len(sys.argv) >= 2:
     criteo_folder = sys.argv[1]
 else:
     criteo_folder = "data"
-df = pd.concat((pd.read_parquet(os.path.join(criteo_folder, f"day_{i}.pq")) for i in range(1)))
+df_train = pd.read_parquet(
+    os.path.join(criteo_folder, f"train_day_0_to_{NR_DAYS_IN_TRAIN_SET-1}.pq")
+)
+df_test = pd.read_parquet(
+    os.path.join(
+        criteo_folder,
+        f"test_day_{NR_DAYS_IN_TRAIN_SET}_to_{NR_DAYS_IN_TRAIN_SET+NR_DAYS_IN_TEST_SET-1}.pq",
+    )
+)
 
 print("Built dataframe")
 
 # X = np.require(df.iloc[:, 1:].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-X = df.iloc[:, 1:].to_numpy(dtype=np.float32)
+X_train = df_train.iloc[:, 1:].to_numpy(dtype=np.float32)
 # y = np.require(df.iloc[:, 0].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-y = df.iloc[:, 0].to_numpy(dtype=np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500000, shuffle=True)
+y_train = df_train.iloc[:, 0].to_numpy(dtype=np.float32)
+
+X_test = df_test.iloc[:, 1:].to_numpy(dtype=np.float32)
+y_test = df_test.iloc[:, 0].to_numpy(dtype=np.float32)
 
 train_size, nfeatures = X_train.shape
 
-# del df
-
-# X_train, y_train = shuffle(X_train, y_train, random_state=random_state)
-
-X_train = np.require(X_train, dtype=np.float32, requirements=['C', 'A', 'O'])
-y_train = np.require(y_train, dtype=np.float32, requirements=['C', 'A', 'O'])
-X_test = np.require(X_test, dtype=np.float32, requirements=['O'])
-y_test = np.require(y_test, dtype=np.float32, requirements=['O'])
+X_train = np.require(X_train, dtype=np.float32, requirements=["C", "A", "O"])
+y_train = np.require(y_train, dtype=np.float32, requirements=["C", "A", "O"])
+X_test = np.require(X_test, dtype=np.float32, requirements=["O"])
+y_test = np.require(y_test, dtype=np.float32, requirements=["O"])
 
 print("Built numpy arrays")
 
-del df
-del X
-del y
+del df_train
+del df_test
 
 accuracies_dpu = []
 accuracies_cpu = []
@@ -74,7 +82,9 @@ print(f"number of points : {train_size}")
 data_size = train_size * (nfeatures + 1) * 4
 print(f"data size = {size(data_size)}")
 
-clf2 = DecisionTreeClassifier(random_state=random_state, criterion='gini', splitter='random', max_depth=10)
+clf2 = DecisionTreeClassifier(
+    random_state=random_state, criterion="gini", splitter="random", max_depth=10
+)
 
 tic = perf_counter()
 clf2.fit(X_train, y_train)
@@ -100,8 +110,13 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
     data_size = npoints_per_dpu * (nfeatures + 1) * 4
     print(f"data size per dpu= {size(data_size)}")
 
-    clf = DecisionTreeClassifierDpu(random_state=None, criterion='gini_dpu', splitter='random_dpu', ndpu=ndpu,
-                                    max_depth=10)
+    clf = DecisionTreeClassifierDpu(
+        random_state=None,
+        criterion="gini_dpu",
+        splitter="random_dpu",
+        ndpu=ndpu,
+        max_depth=10,
+    )
 
     npoints_rounded = npoints_per_dpu * ndpu
     print(f"npoints_rounded : {npoints_rounded}")
@@ -147,10 +162,11 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
             "Inter PIM core time": inter_pim_core_times,
             "CPU-PIM time": cpu_pim_times,
             "CPU accuracy": accuracies_cpu,
-            "CPU Balanced accracy score": balanced_accuracy_score_cpu,
+            "CPU Balanced accuracy score": balanced_accuracy_score_cpu,
             "Total time on CPU": total_times_cpu,
             "Build time on CPU": build_times_cpu,
         },
-        index=ndpu_effective)
+        index=ndpu_effective,
+    )
 
     df.to_csv("criteo_results.csv")
