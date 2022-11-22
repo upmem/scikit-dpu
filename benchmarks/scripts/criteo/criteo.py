@@ -4,7 +4,11 @@ from time import perf_counter
 
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd
 from hurry.filesize import size
+
+from sklearnex import patch_sklearn
+patch_sklearn()
 
 from skdpu.tree import _perfcounter as _perfcounter_dpu
 from skdpu.tree._classes import DecisionTreeClassifierDpu
@@ -16,7 +20,7 @@ from sklearn.utils import shuffle
 
 MAX_FEATURE_DPU = 10000000
 
-ndpu_list = [64]
+ndpu_list = [2048]
 random_state = 42
 
 NR_DAYS_IN_TRAIN_SET = 2
@@ -26,36 +30,49 @@ if len(sys.argv) >= 2:
     criteo_folder = sys.argv[1]
 else:
     criteo_folder = "data"
-df_train = pd.read_parquet(
+print("reading data from ", criteo_folder)
+
+df_train = dd.read_parquet(
     os.path.join(criteo_folder, f"train_day_0_to_{NR_DAYS_IN_TRAIN_SET-1}.pq")
 )
-df_test = pd.read_parquet(
+
+print("read train dataframe")
+
+# X = np.require(df.iloc[:, 1:].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
+# X_train = df_train.iloc[:, 1:].to_numpy(dtype=np.float32)
+# y = np.require(df.iloc[:, 0].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
+# y_train = df_train.iloc[:, 0].to_numpy(dtype=np.float32)
+
+train_size = df_train.shape[0].compute()
+nfeatures = df_train.shape[1]
+print(f"train_size: {train_size}, nfeatures: {nfeatures}")
+
+# X_train = np.require(X_train, dtype=np.float32, requirements=["C", "A", "O"])
+X_train = np.require(df_train.iloc[:, 1:], dtype=np.float32, requirements=["C", "A", "O"])
+# y_train = np.require(y_train, dtype=np.float32, requirements=["C", "A", "O"])
+y_train = np.require(df_train.iloc[:, 0], dtype=np.float32, requirements=["C", "A", "O"])
+
+print("built train numpy arrays")
+
+del df_train
+
+df_test = dd.read_parquet(
     os.path.join(
         criteo_folder,
         f"test_day_{NR_DAYS_IN_TRAIN_SET}_to_{NR_DAYS_IN_TRAIN_SET+NR_DAYS_IN_TEST_SET-1}.pq",
     )
 )
 
-print("Built dataframe")
+print("read test dataframe")
 
-# X = np.require(df.iloc[:, 1:].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-X_train = df_train.iloc[:, 1:].to_numpy(dtype=np.float32)
-# y = np.require(df.iloc[:, 0].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-y_train = df_train.iloc[:, 0].to_numpy(dtype=np.float32)
+# X_test = df_test.iloc[:, 1:].to_numpy(dtype=np.float32)
+# y_test = df_test.iloc[:, 0].to_numpy(dtype=np.float32)
 
-X_test = df_test.iloc[:, 1:].to_numpy(dtype=np.float32)
-y_test = df_test.iloc[:, 0].to_numpy(dtype=np.float32)
+X_test = np.require(df_test.iloc[:, 1:], dtype=np.float32, requirements=["O"])
+y_test = np.require(df_test.iloc[:, 0], dtype=np.float32, requirements=["O"])
 
-train_size, nfeatures = X_train.shape
+print("built test numpy arrays")
 
-X_train = np.require(X_train, dtype=np.float32, requirements=["C", "A", "O"])
-y_train = np.require(y_train, dtype=np.float32, requirements=["C", "A", "O"])
-X_test = np.require(X_test, dtype=np.float32, requirements=["O"])
-y_test = np.require(y_test, dtype=np.float32, requirements=["O"])
-
-print("Built numpy arrays")
-
-del df_train
 del df_test
 
 accuracies_dpu = []
@@ -89,6 +106,7 @@ clf2 = DecisionTreeClassifier(
 tic = perf_counter()
 clf2.fit(X_train, y_train)
 toc = perf_counter()
+print(f"CPU build time: {toc - tic}")
 # export_graphviz(clf2, out_file="tree_cpu.dot")
 y_pred2 = clf2.predict(X_test)
 cpu_accuracy = accuracy_score(y_test, y_pred2)
