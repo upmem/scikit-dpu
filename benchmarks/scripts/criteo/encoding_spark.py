@@ -119,7 +119,7 @@ if __name__ == "__main__":
         "/scratch/sbrocard/datasets/criteo_spark/"
         + f"train_day_0_to_{NR_DAYS_IN_TRAIN_SET-1}.pq",
         mode="overwrite",
-        compression=None,
+        compression='none',
     )
 
     df_test_encoded.write.parquet(
@@ -127,5 +127,5 @@ if __name__ == "__main__":
         + f"test_day_{NR_DAYS_IN_TRAIN_SET}"
         + f"_to_{NR_DAYS_IN_TRAIN_SET + NR_DAYS_IN_TEST_SET - 1}.pq",
         mode="overwrite",
-        compression=None,
+        compression='none',
     )
