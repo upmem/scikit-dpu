@@ -90,6 +90,14 @@ print("built test numpy arrays")
 
 del df_test
 
+train_accuracies_dpu = []
+train_accuracies_intel = []
+train_accuracies_sklearn = []
+
+train_balanced_accuracies_dpu = []
+train_balanced_accuracies_intel = []
+train_balanced_accuracies_sklearn = []
+
 accuracies_dpu = []
 accuracies_intel = []
 accuracies_sklearn = []
@@ -133,13 +141,18 @@ clf_intel.fit(X_train, y_train)
 toc = perf_counter()
 print(f"Intel build time: {toc - tic}")
 # export_graphviz(clf2, out_file="tree_cpu.dot")
-y_pred_intel = clf_intel.predict(X_test)
-intel_accuracy = accuracy_score(y_test, y_pred_intel)
-intel_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred_intel)
-del y_pred_intel
+y_pred = clf_intel.predict(X_train)
+intel_train_accuracy = accuracy_score(y_train, y_pred)
+intel_train_balanced_accuracy = balanced_accuracy_score(y_train, y_pred)
+y_pred = clf_intel.predict(X_test)
+intel_accuracy = accuracy_score(y_test, y_pred)
+intel_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
+del y_pred
 del clf_intel
 
 intel_total_time = toc - tic
+print(f"Train Accuracy for Intel: {intel_train_accuracy}")
+print(f"Balanced Train Accuracy for Intel: {intel_train_balanced_accuracy}")
 print(f"Accuracy for Intelex: {intel_accuracy}")
 print(f"Balanced accuracy score for Intelex: {intel_balanced_accuracy_score}")
 # print(f"build time for Intel: {_perfcounter_cpu.time_taken} s")
@@ -153,13 +166,18 @@ tic = perf_counter()
 clf_sklearn.fit(X_train, y_train)
 toc = perf_counter()
 print(f"sklearn build time: {toc - tic}")
-y_pred_sklearn = clf_sklearn.predict(X_test)
-sklearn_accuracy = accuracy_score(y_test, y_pred_sklearn)
-sklearn_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred_sklearn)
-del y_pred_sklearn
+y_pred = clf_sklearn.predict(X_train)
+sklearn_train_accuracy = accuracy_score(y_train, y_pred)
+sklearn_train_balanced_accuracy = balanced_accuracy_score(y_train, y_pred)
+y_pred = clf_sklearn.predict(X_test)
+sklearn_accuracy = accuracy_score(y_test, y_pred)
+sklearn_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
+del y_pred
 del clf_sklearn
 
 sklearn_total_time = toc - tic
+print(f"Train Accuracy for sklearn: {sklearn_train_accuracy}")
+print(f"Balanced Train Accuracy for sklearn: {sklearn_train_balanced_accuracy}")
 print(f"Accuracy for sklearn: {sklearn_accuracy}")
 print(f"Balanced accuracy score for sklearn: {sklearn_balanced_accuracy_score}")
 print(f"build time for sklearn: {_perfcounter_cpu.time_taken} s")
@@ -191,11 +209,16 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
     toc = perf_counter()
     print(f"total time for DPU: {toc - tic}")
     # export_graphviz(clf, out_file="tree_dpu.dot")
+    y_pred = clf.predict(X_rounded)
+    dpu_train_accuracy = accuracy_score(y_rounded, y_pred)
+    dpu_train_balanced_accuracy = balanced_accuracy_score(y_rounded, y_pred)
     y_pred = clf.predict(X_test)
     dpu_accuracy = accuracy_score(y_test, y_pred)
     dpu_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
 
     # read DPU times
+    train_accuracies_dpu.append(dpu_train_accuracy)
+    train_balanced_accuracies_dpu.append(dpu_train_balanced_accuracy)
     accuracies_dpu.append(dpu_accuracy)
     balanced_accuracy_score_dpu.append(dpu_balanced_accuracy_score)
     build_times_dpu.append(_perfcounter_dpu.time_taken)
@@ -205,18 +228,24 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
     inter_pim_core_times.append(_perfcounter_dpu.time_taken - _perfcounter_dpu.dpu_time)
     cpu_pim_times.append(_perfcounter_dpu.cpu_pim_time)
     dpu_kernel_times.append(_perfcounter_dpu.dpu_time)
+    print(f"Train Accuracy for DPU: {dpu_train_accuracy}")
+    print(f"Balanced Train Accuracy for DPU: {dpu_train_balanced_accuracy}")
     print(f"Accuracy for DPUs: {dpu_accuracy}")
     print(f"Balanced accracy score for DPUs: {dpu_balanced_accuracy_score}")
     print(f"build time for DPUs : {_perfcounter_dpu.time_taken} s")
     print(f"total time for DPUs: {toc - tic} s")
 
     # read Intel times
+    train_accuracies_intel.append(intel_train_accuracy)
+    train_balanced_accuracies_intel.append(intel_train_balanced_accuracy)
     accuracies_intel.append(intel_accuracy)
     balanced_accuracy_score_intel.append(balanced_accuracy_score)
     # build_times_intel.append(_perfcounter_cpu.time_taken)
     total_times_intel.append(intel_total_time)
 
     # read sklearn times
+    train_accuracies_sklearn.append(sklearn_train_accuracy)
+    train_balanced_accuracies_sklearn.append(sklearn_train_balanced_accuracy)
     accuracies_sklearn.append(sklearn_accuracy)
     balanced_accuracy_score_sklearn.append(sklearn_balanced_accuracy_score)
     build_times_sklearn.append(_perfcounter_cpu.time_taken)
@@ -224,6 +253,8 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
 
     df = pd.DataFrame(
         {
+            "DPU train accuracy": train_accuracies_dpu,
+            "DPU train balanced accuracy": train_balanced_accuracies_dpu,
             "DPU accuracy": accuracies_dpu,
             "DPU Balanced accracy score": balanced_accuracy_score_dpu,
             "Total time on DPU": total_times_dpu,
@@ -233,10 +264,14 @@ for i_ndpu, ndpu in enumerate(ndpu_list):
             "PIM-CPU time": pim_cpu_times,
             "Inter PIM core time": inter_pim_core_times,
             "CPU-PIM time": cpu_pim_times,
+            "Intel train accuracy": train_accuracies_intel,
+            "Intel train balanced accuracy": train_balanced_accuracies_intel,
             "Intel accuracy": accuracies_intel,
             "Intel Balanced accuracy score": balanced_accuracy_score_intel,
             "Total time on Intel": total_times_intel,
             # "Build time on Intel": build_times_intel,
+            "sklearn train accuracy": train_accuracies_sklearn,
+            "sklearn train balanced accuracy": train_balanced_accuracies_sklearn,
             "sklearn accuracy": accuracies_sklearn,
             "sklearn Balanced accuracy score": balanced_accuracy_score_sklearn,
             "Total time on sklearn": total_times_sklearn,
