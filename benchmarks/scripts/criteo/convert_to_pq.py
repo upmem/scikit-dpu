@@ -2,7 +2,6 @@
 Converts the Criteo dataset CSV to a parquet file for faster access.
 """
 
-import pandas as pd
 import dask.dataframe as dd
 import numpy as np
 from dask.diagnostics import ProgressBar
