@@ -1,6 +1,7 @@
 import sys
 import os
 from time import perf_counter
+from typing import Literal, get_args
 
 import numpy as np
 import pandas as pd
@@ -11,273 +12,251 @@ from sklearnex import patch_sklearn
 
 patch_sklearn()
 
+from sklearn.base import BaseEstimator
 from skdpu.tree import _perfcounter as _perfcounter_dpu
 from skdpu.tree._classes import DecisionTreeClassifierDpu
-from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, balanced_accuracy_score
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn.tree import _perfcounter as _perfcounter_cpu
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.utils import shuffle
 
 MAX_FEATURE_DPU = 10000000
 
-ndpu_list = [2048]
-random_state = 42
+NDPU_LIST = [2048]
+RANDOM_STATE = 42
 
-NR_DAYS_IN_TRAIN_SET = 2
-NR_DAYS_IN_TEST_SET = NR_DAYS_IN_TRAIN_SET
+NR_DAYS_IN_TRAIN_SET = 1
+NR_DAYS_IN_TEST_SET = 0
+DO_TEST = NR_DAYS_IN_TEST_SET > 0
 
-if len(sys.argv) >= 2:
-    criteo_folder = sys.argv[1]
-else:
-    criteo_folder = "data"
-print("reading data from ", criteo_folder)
+# define the different algorithms/accelerators
+BACKENDS_NAME = Literal["sklearn", "intel", "dpu"]
+BACKENDS = get_args(BACKENDS_NAME)
+# define the figures of merit for the different algorithms/accelerators
+FOM = {
+    "common": [
+        "train accuracy",
+        "train balanced accuracy",
+        "total time",
+    ],
+    "test": ["test accuracy", "test balanced accuracy"],
+    "sklearn": ["build time"],
+    "intel": [],
+    "dpu": [
+        "ndpu",
+        "build time",
+        "allocation time",
+        "PIM-CPU time",
+        "inter PIM core time",
+        "CPU-PIM time",
+        "DPU kernel time",
+    ],
+}
+assert FOM.keys() - {"common", "test"} == set(BACKENDS)
 
-df_train = dd.read_parquet(
-    os.path.join(criteo_folder, "train_day_0_" + f"to_{NR_DAYS_IN_TRAIN_SET-1}.pq")
-)
+KIND_NAME = Literal["train", "test"]
 
-print("read train dataframe")
 
-# X = np.require(df.iloc[:, 1:].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-# X_train = df_train.iloc[:, 1:].to_numpy(dtype=np.float32)
-# y = np.require(df.iloc[:, 0].to_numpy(), dtype=np.float32, requirements=['C', 'A', 'O'])
-# y_train = df_train.iloc[:, 0].to_numpy(dtype=np.float32)
-
-train_size = df_train.shape[0].compute()
-# train_size = df_train.shape[0]
-nfeatures = df_train.shape[1]
-print(f"train_size: {train_size}, nfeatures: {nfeatures}")
-
-# X_train = np.require(X_train, dtype=np.float32, requirements=["C", "A", "O"])
-# X_train = np.require(
-#     df_train.iloc[:, 1:], dtype=np.float32, requirements=["C", "A", "O"]
-# )
-# y_train = np.require(y_train, dtype=np.float32, requirements=["C", "A", "O"])
-# y_train = np.require(
-#     df_train.iloc[:, 0], dtype=np.float32, requirements=["C", "A", "O"]
-# )
-da_train = df_train.to_dask_array().astype(np.float32)
-X_train = da_train[:, 1:].compute()
-y_train = da_train[:, 0].compute()
-
-print("built train numpy arrays")
-
-del df_train
-
-df_test = dd.read_parquet(
-    os.path.join(
-        criteo_folder,
-        f"test_day_{NR_DAYS_IN_TRAIN_SET}_"
-        + f"to_{NR_DAYS_IN_TRAIN_SET+NR_DAYS_IN_TEST_SET-1}.pq",
+def get_filename(train: bool) -> str:
+    start_index = 0 if train else NR_DAYS_IN_TRAIN_SET
+    end_index = (
+        NR_DAYS_IN_TRAIN_SET - 1
+        if train
+        else NR_DAYS_IN_TRAIN_SET + NR_DAYS_IN_TEST_SET - 1
     )
-)
+    filename_prefix = "train_" if train else "test_"
+    filename = filename_prefix + f"day_{start_index}_to_{end_index}.pq"
+    return filename
 
-print("read test dataframe")
 
-# X_test = df_test.iloc[:, 1:].to_numpy(dtype=np.float32)
-# y_test = df_test.iloc[:, 0].to_numpy(dtype=np.float32)
+def get_dataset(
+    criteo_folder: str, train: bool = True
+) -> tuple[np.ndarray, np.ndarray]:
+    filename = get_filename(train)
+    df = dd.read_parquet(os.path.join(criteo_folder, filename))
+    print("read dataframe")
 
-# X_test = np.require(df_test.iloc[:, 1:], dtype=np.float32, requirements=["O"])
-# y_test = np.require(df_test.iloc[:, 0], dtype=np.float32, requirements=["O"])
+    da = df.to_dask_array().astype(np.float32)
+    X = da[:, 1:].compute()
+    y = da[:, 0].compute()
 
-da_test = df_test.to_dask_array().astype(np.float32)
-X_test = da_test[:, 1:].compute()
-y_test = da_test[:, 0].compute()
+    size, nfeatures = X.shape
+    nfeatures += 1  # add 1 for the target column
+    if train:
+        print(f"train size: {size}, nfeatures: {nfeatures}")
 
-print("built test numpy arrays")
+    # data needs to be c-contiguous for DPU
+    if train:
+        flags = X.flags and y.flags
+        if not flags.c_contiguous or not flags.aligned or not flags.owndata:
+            print("converting numpy arrays to a compatible format")
+            X = np.require(X, dtype=np.float32, requirements=["C", "A", "O"])
+            y = np.require(y, dtype=np.float32, requirements=["C", "A", "O"])
 
-del df_test
+    print("built train numpy arrays")
+    return X, y, size, nfeatures
 
-train_accuracies_dpu = []
-train_accuracies_intel = []
-train_accuracies_sklearn = []
 
-train_balanced_accuracies_dpu = []
-train_balanced_accuracies_intel = []
-train_balanced_accuracies_sklearn = []
+class BenchmarkRecord:
+    def __init__(self, name: BACKENDS_NAME, do_test: bool = False):
+        self.name = name
+        assert name in BACKENDS
 
-accuracies_dpu = []
-accuracies_intel = []
-accuracies_sklearn = []
+        foms = FOM["common"] + (FOM["test"] if do_test else []) + FOM[name]
+        self.record = {fom: [] for fom in foms}
 
-balanced_accuracy_score_dpu = []
-balanced_accuracy_score_intel = []
-balanced_accuracy_score_sklearn = []
+        self.do_test = do_test
 
-build_times_dpu = []
-# build_times_intel = []
-build_times_sklearn = []
+    def get_accuracies(
+        self,
+        kind: KIND_NAME,
+        name: BACKENDS_NAME,
+        clf: BaseEstimator,
+        X: np.ndarray,
+        y: np.ndarray,
+    ) -> None:
+        assert kind in get_args(KIND_NAME)
 
-total_times_dpu = []
-total_times_intel = []
-total_times_sklearn = []
+        y_pred = clf.predict(X)
+        accuracy = accuracy_score(y, y_pred)
+        self.record[f"{kind} accuracy"].append(accuracy)
+        print(f"{kind} Accuracy for {name}: {accuracy}")
 
-init_times_dpu = []
-pim_cpu_times = []
-inter_pim_core_times = []
-cpu_pim_times = []
-dpu_kernel_times = []
+        balanced_accuracy = balanced_accuracy_score(y, y_pred)
+        self.record[f"{kind} balanced accuracy"].append(balanced_accuracy)
+        print(f"Balanced {kind} Accuracy for {name}: {balanced_accuracy}")
 
-ndpu_effective = []
+    def benchmark_classifier(
+        self,
+        clf: BaseEstimator,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_test: np.ndarray = None,
+        y_test: np.ndarray = None,
+        *,
+        export_graph: bool = False,
+        ndpu: int = None,
+    ) -> None:
+        tic = perf_counter()
+        clf.fit(X_train, y_train)
+        toc = perf_counter()
 
-print(f"number of points : {train_size}")
-data_size = train_size * (nfeatures + 1) * 4
-print(f"data size = {size(data_size)}")
+        total_time = toc - tic
+        self.record["total time"].append(total_time)
+        print(f"total time for {self.name}: {total_time} s")
 
-clf_intel = RandomForestClassifier(
-    random_state=random_state,
-    criterion="gini",
-    n_estimators=1,
-    max_depth=10,
-    bootstrap=False,
-    max_features=None,
-    n_jobs=-1,
-)
+        if export_graph:
+            export_graphviz(clf, out_file=f"tree_{self.name}.dot")
 
-tic = perf_counter()
-clf_intel.fit(X_train, y_train)
-toc = perf_counter()
-print(f"Intel build time: {toc - tic}")
-# export_graphviz(clf2, out_file="tree_cpu.dot")
-y_pred = clf_intel.predict(X_train)
-intel_train_accuracy = accuracy_score(y_train, y_pred)
-intel_train_balanced_accuracy = balanced_accuracy_score(y_train, y_pred)
-y_pred = clf_intel.predict(X_test)
-intel_accuracy = accuracy_score(y_test, y_pred)
-intel_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
-del y_pred
-del clf_intel
+        self.get_accuracies("train", self.name, clf, X_train, y_train)
 
-intel_total_time = toc - tic
-print(f"Train Accuracy for Intel: {intel_train_accuracy}")
-print(f"Balanced Train Accuracy for Intel: {intel_train_balanced_accuracy}")
-print(f"Accuracy for Intelex: {intel_accuracy}")
-print(f"Balanced accuracy score for Intelex: {intel_balanced_accuracy_score}")
-# print(f"build time for Intel: {_perfcounter_cpu.time_taken} s")
-print(f"total time for Intel: {toc - tic} s")
+        if self.do_test:
+            self.get_accuracies("test", self.name, clf, X_test, y_test)
 
-clf_sklearn = DecisionTreeClassifier(
-    random_state=random_state, criterion="gini", splitter="random", max_depth=10
-)
+        if self.name == "sklearn":
+            build_time = _perfcounter_cpu.time_taken
+            self.record["build time"].append(build_time)
+            print(f"build time for sklearn: {build_time} s")
 
-tic = perf_counter()
-clf_sklearn.fit(X_train, y_train)
-toc = perf_counter()
-print(f"sklearn build time: {toc - tic}")
-y_pred = clf_sklearn.predict(X_train)
-sklearn_train_accuracy = accuracy_score(y_train, y_pred)
-sklearn_train_balanced_accuracy = balanced_accuracy_score(y_train, y_pred)
-y_pred = clf_sklearn.predict(X_test)
-sklearn_accuracy = accuracy_score(y_test, y_pred)
-sklearn_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
-del y_pred
-del clf_sklearn
+        elif self.name == "dpu":
+            build_time = _perfcounter_dpu.time_taken
+            self.record["build time"].append(build_time)
+            print(f"build time for DPU: {build_time} s")
 
-sklearn_total_time = toc - tic
-print(f"Train Accuracy for sklearn: {sklearn_train_accuracy}")
-print(f"Balanced Train Accuracy for sklearn: {sklearn_train_balanced_accuracy}")
-print(f"Accuracy for sklearn: {sklearn_accuracy}")
-print(f"Balanced accuracy score for sklearn: {sklearn_balanced_accuracy_score}")
-print(f"build time for sklearn: {_perfcounter_cpu.time_taken} s")
-print(f"total time for sklearn: {toc - tic} s")
+            init_time = _perfcounter_dpu.dpu_init_time
+            self.record["allocation time"].append(init_time)
 
-for i_ndpu, ndpu in enumerate(ndpu_list):
-    print(f"\nnumber of dpus : {ndpu}")
-    npoints_per_dpu = 2 * (train_size // (2 * ndpu))
-    if npoints_per_dpu * nfeatures > MAX_FEATURE_DPU:
-        print("not enough DPUs, skipping")
-        continue
-    ndpu_effective.append(ndpu)
-    data_size = npoints_per_dpu * (nfeatures + 1) * 4
-    print(f"data size per dpu= {size(data_size)}")
+            pim_cpu_time = 0.0  # there is no final transfer for trees
+            self.record["PIM-CPU time"].append(pim_cpu_time)
 
-    clf = DecisionTreeClassifierDpu(
-        random_state=None,
-        criterion="gini_dpu",
-        splitter="random_dpu",
-        ndpu=ndpu,
+            inter_pim_core_time = (
+                _perfcounter_dpu.time_taken - _perfcounter_dpu.dpu_time
+            )
+            self.record["inter PIM core time"].append(inter_pim_core_time)
+
+            cpu_pim_time = _perfcounter_dpu.cpu_pim_time
+            self.record["CPU-PIM time"].append(cpu_pim_time)
+
+            dpu_kernel_time = _perfcounter_dpu.dpu_time
+            self.record["DPU kernel time"].append(dpu_kernel_time)
+
+            self.record["ndpu"].append(ndpu)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame(self.record).add_prefix(f"{self.name} ")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) >= 2:
+        criteo_folder = sys.argv[1]
+    else:
+        criteo_folder = "data"
+    print("reading data from ", criteo_folder)
+
+    X_train, y_train, train_size, nfeatures = get_dataset(criteo_folder)
+
+    if DO_TEST:
+        X_test, y_test, _, nfeatures_test = get_dataset(criteo_folder, train=False)
+        assert nfeatures == nfeatures_test
+    else:
+        X_test, y_test = None, None
+
+    sklearn_record = BenchmarkRecord("sklearn", do_test=DO_TEST)
+    intel_record = BenchmarkRecord("intel", do_test=DO_TEST)
+    dpu_record = BenchmarkRecord("dpu", do_test=DO_TEST)
+
+    print(f"number of points : {train_size}")
+    data_size = train_size * (nfeatures + 1) * 4
+    print(f"data size = {size(data_size)}")
+
+    print("starting intelex benchmark")
+    clf_intel = RandomForestClassifier(
+        random_state=RANDOM_STATE,
+        criterion="gini",
+        n_estimators=1,
         max_depth=10,
+        bootstrap=False,
+        max_features=None,
+        n_jobs=-1,
     )
+    intel_record.benchmark_classifier(clf_intel, X_train, y_train, X_test, y_test)
 
-    npoints_rounded = npoints_per_dpu * ndpu
-    print(f"npoints_rounded : {npoints_rounded}")
-    X_rounded, y_rounded = X_train[:npoints_rounded], y_train[:npoints_rounded]
-    tic = perf_counter()
-    clf.fit(X_rounded, y_rounded)
-    toc = perf_counter()
-    print(f"total time for DPU: {toc - tic}")
-    # export_graphviz(clf, out_file="tree_dpu.dot")
-    y_pred = clf.predict(X_rounded)
-    dpu_train_accuracy = accuracy_score(y_rounded, y_pred)
-    dpu_train_balanced_accuracy = balanced_accuracy_score(y_rounded, y_pred)
-    y_pred = clf.predict(X_test)
-    dpu_accuracy = accuracy_score(y_test, y_pred)
-    dpu_balanced_accuracy_score = balanced_accuracy_score(y_test, y_pred)
-
-    # read DPU times
-    train_accuracies_dpu.append(dpu_train_accuracy)
-    train_balanced_accuracies_dpu.append(dpu_train_balanced_accuracy)
-    accuracies_dpu.append(dpu_accuracy)
-    balanced_accuracy_score_dpu.append(dpu_balanced_accuracy_score)
-    build_times_dpu.append(_perfcounter_dpu.time_taken)
-    total_times_dpu.append(toc - tic)
-    init_times_dpu.append(_perfcounter_dpu.dpu_init_time)
-    pim_cpu_times.append(0.0)  # there is no final transfer for trees
-    inter_pim_core_times.append(_perfcounter_dpu.time_taken - _perfcounter_dpu.dpu_time)
-    cpu_pim_times.append(_perfcounter_dpu.cpu_pim_time)
-    dpu_kernel_times.append(_perfcounter_dpu.dpu_time)
-    print(f"Train Accuracy for DPU: {dpu_train_accuracy}")
-    print(f"Balanced Train Accuracy for DPU: {dpu_train_balanced_accuracy}")
-    print(f"Accuracy for DPUs: {dpu_accuracy}")
-    print(f"Balanced accracy score for DPUs: {dpu_balanced_accuracy_score}")
-    print(f"build time for DPUs : {_perfcounter_dpu.time_taken} s")
-    print(f"total time for DPUs: {toc - tic} s")
-
-    # read Intel times
-    train_accuracies_intel.append(intel_train_accuracy)
-    train_balanced_accuracies_intel.append(intel_train_balanced_accuracy)
-    accuracies_intel.append(intel_accuracy)
-    balanced_accuracy_score_intel.append(balanced_accuracy_score)
-    # build_times_intel.append(_perfcounter_cpu.time_taken)
-    total_times_intel.append(intel_total_time)
-
-    # read sklearn times
-    train_accuracies_sklearn.append(sklearn_train_accuracy)
-    train_balanced_accuracies_sklearn.append(sklearn_train_balanced_accuracy)
-    accuracies_sklearn.append(sklearn_accuracy)
-    balanced_accuracy_score_sklearn.append(sklearn_balanced_accuracy_score)
-    build_times_sklearn.append(_perfcounter_cpu.time_taken)
-    total_times_sklearn.append(sklearn_total_time)
-
-    df = pd.DataFrame(
-        {
-            "DPU train accuracy": train_accuracies_dpu,
-            "DPU train balanced accuracy": train_balanced_accuracies_dpu,
-            "DPU accuracy": accuracies_dpu,
-            "DPU Balanced accracy score": balanced_accuracy_score_dpu,
-            "Total time on DPU": total_times_dpu,
-            "Build time on DPU": build_times_dpu,
-            "DPU kernel time": dpu_kernel_times,
-            "DPU allocation time": init_times_dpu,
-            "PIM-CPU time": pim_cpu_times,
-            "Inter PIM core time": inter_pim_core_times,
-            "CPU-PIM time": cpu_pim_times,
-            "Intel train accuracy": train_accuracies_intel,
-            "Intel train balanced accuracy": train_balanced_accuracies_intel,
-            "Intel accuracy": accuracies_intel,
-            "Intel Balanced accuracy score": balanced_accuracy_score_intel,
-            "Total time on Intel": total_times_intel,
-            # "Build time on Intel": build_times_intel,
-            "sklearn train accuracy": train_accuracies_sklearn,
-            "sklearn train balanced accuracy": train_balanced_accuracies_sklearn,
-            "sklearn accuracy": accuracies_sklearn,
-            "sklearn Balanced accuracy score": balanced_accuracy_score_sklearn,
-            "Total time on sklearn": total_times_sklearn,
-            "Build time on sklearn": build_times_sklearn,
-        },
-        index=ndpu_effective,
+    print("starting sklearn benchmark")
+    clf_sklearn = DecisionTreeClassifier(
+        random_state=RANDOM_STATE, criterion="gini", splitter="random", max_depth=10
     )
+    sklearn_record.benchmark_classifier(clf_sklearn, X_train, y_train, X_test, y_test)
 
-    df.to_csv("criteo_results.csv")
+    print("starting DPU benchmarks")
+    for i_ndpu, ndpu in enumerate(NDPU_LIST):
+        print(f"\nnumber of dpus : {ndpu}")
+        npoints_per_dpu = 2 * (train_size // (2 * ndpu))
+        data_size = npoints_per_dpu * (nfeatures + 1) * 4
+        print(f"data size per dpu= {size(data_size)}")
+        if npoints_per_dpu * nfeatures > MAX_FEATURE_DPU:
+            print("not enough DPUs, skipping")
+            continue
+
+        clf_dpu = DecisionTreeClassifierDpu(
+            random_state=None,
+            criterion="gini_dpu",
+            splitter="random_dpu",
+            ndpu=ndpu,
+            max_depth=10,
+        )
+
+        npoints_rounded = npoints_per_dpu * ndpu
+        print(f"npoints_rounded : {npoints_rounded}")
+        X_rounded, y_rounded = X_train[:npoints_rounded], y_train[:npoints_rounded]
+
+        dpu_record.benchmark_classifier(
+            clf_dpu, X_rounded, y_rounded, X_test, y_test, ndpu=ndpu
+        )
+
+        # make the result DataFrame at every iteration in case we terminate early
+        result = pd.concat(
+            (sklearn_record.to_dataframe(), intel_record.to_dataframe()), axis=1
+        )
+        result = dpu_record.to_dataframe().merge(result, how="cross").set_index("ndpu")
+
+        result.to_csv("criteo_results.csv")
