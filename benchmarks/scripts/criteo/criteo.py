@@ -22,7 +22,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 MAX_FEATURE_DPU = 10000000
 
-NDPU_LIST = [2048]
+NDPU_LIST = [256, 512, 1024, 2048]
 RANDOM_STATE = 42
 
 NR_DAYS_IN_TRAIN_SET = 1
@@ -257,6 +257,6 @@ if __name__ == "__main__":
         result = pd.concat(
             (sklearn_record.to_dataframe(), intel_record.to_dataframe()), axis=1
         )
-        result = dpu_record.to_dataframe().merge(result, how="cross").set_index("ndpu")
+        result = dpu_record.to_dataframe().merge(result, how="cross").set_index("dpu ndpu")
 
         result.to_csv("criteo_results.csv")
