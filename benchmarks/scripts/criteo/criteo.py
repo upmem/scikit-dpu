@@ -22,7 +22,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 MAX_FEATURE_DPU = 10000000
 
-NDPU_LIST = [256, 512, 1024, 2048]
+NDPU_LIST = [256, 362, 512, 724, 1024, 1448, 2048]
 RANDOM_STATE = 42
 
 NR_DAYS_IN_TRAIN_SET = 1
