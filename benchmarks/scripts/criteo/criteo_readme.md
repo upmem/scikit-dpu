@@ -29,7 +29,7 @@ At this point, it is preferrable to convert the dataset to a format with faster 
 
 ### In memory (Pandas)
 
-If you have enough memory to hold an entire day of Criteo data in RAM, the script `convert_to_pq_inmemory.py` will convert the csv files to parquet using base pandas.
+If you have enough memory to hold an entire day of Criteo data in RAM, the script [convert_to_pq_inmemory.py](convert_to_pq_inmemory.py) will convert the csv files to parquet using base pandas.
 
 Python requirements:
 
@@ -40,7 +40,7 @@ pyarrow
 
 ### Out of memory (Dask)
 
-If you run out of memory during this conversion, you can use dask instead of pandas for lazy evaluation with `convert_to_pq.py`.
+If you run out of memory during this conversion, you can use dask instead of pandas for lazy evaluation with [convert_to_pq_outofmemory.py](convert_to_pq_outofmemory.py).
 
 Python requirements:
 
@@ -59,7 +59,7 @@ In either scripts, you can change the value of `NR_DAYS_IN_TRAIN_SET` and `NR_DA
 
 ### In memory (Pandas) - [Not recommended]
 
-The `category_encoders` library provides a M-estimate encoder that can be used to perform mean target encoding (which is simply a M-estimate encoding with a M value of zero). The scripts `encoding_in_memory.py` shows a way to perform the encoding, with the command `python encoding_in_memory.py /path/to/criteo/folder`.
+The `category_encoders` library provides a M-estimate encoder that can be used to perform mean target encoding (which is simply a M-estimate encoding with a M value of zero). The scripts [encoding_in_memory.py](encoding_in_memory.py) shows a way to perform the encoding, with the command `python encoding_in_memory.py /path/to/criteo/folder`.
 
 Unfortunately the memory requirement is very high (256 GiB to encode a single day of Criteo data), and the runtime is long for anything but small datasets. It is recommended to use this method only for prototyping with a small subset of the Criteo data.
 
@@ -73,10 +73,10 @@ category_encoders
 
 ### Out of memory (Spark)
 
-The script `encoding_spark.py` performs the mean target encoding out-of-memory. It will create and use a single worker on the machine executing the script. If you have access to a Hadoop cluster, consider using it instead.  
+The script [encoding_spark.py](encoding_spark.py) performs the mean target encoding out-of-memory. It will create and use a single worker on the machine executing the script. If you have access to a Hadoop cluster, consider using it instead.  
 Usage: `python encoding_spark.py /path/to/criteo/data`
 
-Parameters that might need tuning in the script are:
+Please adjust the following parameters in the script:
 
 - `spark.driver.memory`: Since we are running spark on a single node, this is the only memory we need to care about. Make sure that it is lower than your available RAM. The default 256g is an overshoot and the process can probably run fine on 10g of memory or less.
 - `spark.local.dir`: This is the directory used by spark for temporary offloads to disk. Make **absolutely sure** that this directory is mounted on a local disk (preferably NVME) with ample space and not a NFS.
