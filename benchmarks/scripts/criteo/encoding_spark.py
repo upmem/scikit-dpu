@@ -14,6 +14,8 @@ NR_DAYS_IN_TEST_SET = 0
 
 TARGET_COL = "0"
 
+SUBSAMPLING_FACTOR = 2
+
 def union_all(*dfs: DataFrame) -> DataFrame:
     return reduce(DataFrame.union, dfs)
 
@@ -83,6 +85,9 @@ if __name__ == "__main__":
             for i in range(NR_DAYS_IN_TRAIN_SET)
         ]
     )
+
+    # chop off some of the training set, keep the beginning
+    df_train = df_train.limit(df_train.count() // SUBSAMPLING_FACTOR)
 
     print("read")
     df_train = df_train.fillna(0)
