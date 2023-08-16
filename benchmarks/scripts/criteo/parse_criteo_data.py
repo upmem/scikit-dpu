@@ -9,8 +9,8 @@ import pyarrow.parquet as pq
 import pandas as pd
 
 
-DATA_FOLDER = '~/data/criteo'
-OUTPUT_FOLDER = '~/data/criteo_parquet'
+DATA_FOLDER = '/scratch/sbrocard/datasets/criteo'
+OUTPUT_FOLDER = '/scratch/sbrocard/datasets/criteo_parquet'
 
 CHUNK_SIZE = 500 * 1024 ** 2
 
@@ -57,7 +57,7 @@ def convert_file_to_parquet(filepath, output_folder, compression='SNAPPY'):
     output_filepattern = op.join(output_folder, filebase + '_{:04d}.parquet')
     chunk_idx = 0
     print(f"Processing {filepath}...")
-    with GzipFile(filepath) as f:
+    with open(filepath, 'rb') as f:
         remainder = b''
         while True:
             try:
@@ -90,8 +90,8 @@ def convert_folder_to_parquet(input_folder, output_folder):
     if not op.exists(output_folder):
         os.makedirs(output_folder)
     for filename in os.listdir(input_folder):
-        if not filename.endswith('.gz'):
-            continue
+        # if not filename.endswith('.gz'):
+        #     continue
         filepath = op.join(input_folder, filename)
         convert_file_to_parquet(filepath, output_folder)
 

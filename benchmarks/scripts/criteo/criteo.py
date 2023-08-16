@@ -22,10 +22,10 @@ from sklearn.ensemble import RandomForestClassifier
 
 MAX_FEATURE_DPU = 10000000
 
-NDPU_LIST = [256, 362, 512, 724, 1024, 1448, 2048]
+NDPU_LIST = [256, 362, 512, 724, 1024, 1448, 2048, 2523]
 RANDOM_STATE = 42
 
-NR_DAYS_IN_TRAIN_SET = 1
+NR_DAYS_IN_TRAIN_SET = 2
 NR_DAYS_IN_TEST_SET = 0
 DO_TEST = NR_DAYS_IN_TEST_SET > 0
 
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     clf_intel = RandomForestClassifier(
         random_state=RANDOM_STATE,
         criterion="gini",
-        n_estimators=1,
+        n_estimators=64,
         max_depth=10,
         bootstrap=False,
         max_features=None,
@@ -226,6 +226,13 @@ if __name__ == "__main__":
         random_state=RANDOM_STATE, criterion="gini", splitter="random", max_depth=10
     )
     sklearn_record.benchmark_classifier(clf_sklearn, X_train, y_train, X_test, y_test)
+
+    # make the result DataFrame now in case we terminate early
+    result = pd.concat(
+        (sklearn_record.to_dataframe(), intel_record.to_dataframe()), axis=1
+    )
+
+    result.to_csv("criteo_results.csv")
 
     print("starting DPU benchmarks")
     for i_ndpu, ndpu in enumerate(NDPU_LIST):

@@ -115,7 +115,7 @@ if __name__ == "__main__":
     )
 
     df_train_encoded.repartition(200).write.parquet(
-        "/scratch/sbrocard/datasets/criteo_spark/"
+        "/scratch/sbrocard/datasets/criteo_spark_quarter/"
         + f"train_day_0_to_{NR_DAYS_IN_TRAIN_SET-1}.pq",
         mode="overwrite",
         compression="none",
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         df_test_encoded = df_test_encoded.fillna(global_mean)
 
         df_test_encoded.repartition(200).write.parquet(
-            "/scratch/sbrocard/datasets/criteo_spark/"
+            "/scratch/sbrocard/datasets/criteo_spark_quarter/"
             + f"test_day_{NR_DAYS_IN_TRAIN_SET}"
             + f"_to_{NR_DAYS_IN_TRAIN_SET + NR_DAYS_IN_TEST_SET - 1}.pq",
             mode="overwrite",
